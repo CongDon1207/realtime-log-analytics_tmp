@@ -144,8 +144,11 @@ realtime-log-analytics/
 
 * **Quy ước đặt tên nhánh `feature`:**
     * `feat/flume-ingestion`: **Hùng** (Flume)
-    * `feat/kafka-pipeline`: **Đôn** (Kafka)
-    * `feat/spark-analytics`: **Hảo** (Spark)
-    * `feat/influxdb-storage`: **Hải** (InfluxDB)
+    * `feat/kafka-pipeline`: **Hảo** (Kafka)
+    * `feat/spark-analytics`: **Hải** (Spark)
+    * `feat/influxdb-storage`: **Đôn** (InfluxDB)
     * `feat/grafana-dashboard`: **Nhật** (Grafana)
+## 📚 Tài liệu chi tiết
+
+- 📄 **Project Doc (Google Docs)**: [Tài liệu Kiến trúc – Hệ thống Giám sát & Phân tích Log Server Tập trung](https://docs.google.com/document/d/1PiGJ2ZUnI4yse3WgkTP1DghxmsFws_z2dIaZyuNYdq8/edit?hl=vi&tab=t.0#heading=h.exjyajopfano)
 
