@@ -68,7 +68,7 @@ Get-Content .\loadgen\web-traffic.js | docker run --rm -i `
 
 Giải thích:
 - `--network=realtime-log-analytics_default`: để k6 gọi được web1|web2|web3 qua DNS nội bộ Docker.
-- `run - < loadgen/web-traffic.js`: nạp script từ STDIN, không cần volume.
+- `run - < scripts/loadgen/web-traffic.js`: nạp script từ STDIN, không cần volume.
 
 ---
 
