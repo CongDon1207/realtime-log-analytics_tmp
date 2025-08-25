@@ -10,7 +10,7 @@ Giải pháp **giám sát & phân tích log real-time** cho web servers:
 
 ## ✨ Tính năng chính
 
-* Đếm **HTTP status** (2xx/3xx/4xx/5xx), **RPS**
+* Đếm **HTTP status** (2xx/3xx/4xx/5xx), **RPS**, **latency**, **byte**
 * Phát hiện **bất thường**: *IP spike*, *error surge*, *scan nhiều URL*
 * **Dashboard** real-time và **Alerting** theo ngưỡng
 * Thiết kế **mở rộng ngang**, **độ trễ thấp**, **chịu lỗi**
