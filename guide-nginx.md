@@ -55,7 +55,7 @@ Trên Linux / macOS / Git Bash (Windows):
 ```bash
 docker run --rm -i \
   --network=realtime-log-analytics_default \
-  grafana/k6 run - < loadgen/web-traffic.js
+  grafana/k6 run - < scripts/loadgen/web-traffic.js
 ```
 
 Trên PowerShell (Windows):
