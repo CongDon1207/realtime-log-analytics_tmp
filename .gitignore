@@ -1,0 +1,77 @@
+# Realtime Log Analytics - .gitignore
+
+# --- OS cruft ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# --- IDE / Editor ---
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+# Virtual envs (any level)
+.venv/
+venv/
+env/
+ENV/
+# Packaging / build
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+.wheels/
+# Test / type / cache
+.tox/
+.nox/
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.cache/
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+nosetests.xml
+
+# --- Jupyter (just in case) ---
+.ipynb_checkpoints/
+
+# --- Logs & temp ---
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# --- Env files & local secrets ---
+.env
+.env.*
+*.env
+*.env.*
+# Explicit known env files
+influxdb/.env.influx
+scripts/log-generator/.env.gen
+
+# --- Docker ---
+# Local overrides
+docker-compose.override.yml
+docker-compose.*.local.yml
+# Misc runtime artifacts
+**/.docker/
+**/*.pid
+
+# --- OS-specific trash (Windows) ---
+$RECYCLE.BIN/
