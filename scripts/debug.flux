@@ -1,0 +1,38 @@
+// 1) Lấy 5 bản ghi gần nhất trong 24h (bất kể measurement/field)
+from(bucket: "http-logs")
+  |> range(start: -24h)
+  |> limit(n: 5)
+  |> yield(name: "sample_rows")
+
+// 2) Liệt kê danh sách measurement
+from(bucket: "http-logs")
+  |> range(start: -24h)
+  |> keep(columns: ["_measurement"])
+  |> group()
+  |> distinct(column: "_measurement")
+  |> yield(name: "measurements")
+
+// 3) Liệt kê danh sách field
+from(bucket: "http-logs")
+  |> range(start: -24h)
+  |> keep(columns: ["_field"])
+  |> group()
+  |> distinct(column: "_field")
+  |> yield(name: "fields")
+
+// 4) Liệt kê một số giá trị tag status (nếu có)
+from(bucket: "http-logs")
+  |> range(start: -24h)
+  |> filter(fn: (r) => exists r.status)
+  |> keep(columns: ["status"])
+  |> group()
+  |> distinct(column: "status")
+  |> limit(n: 20)
+  |> yield(name: "status_tags")
+
+// 5) Đếm số bản ghi theo phút trong 1h gần nhất (để xem có dữ liệu "mới" không)
+from(bucket: "http-logs")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "http_requests" and r._field == "count")
+  |> aggregateWindow(every: 1m, fn: sum, createEmpty: false)
+  |> yield(name: "counts_1m_last_hour")
