@@ -56,14 +56,6 @@ tmp/
 temp/
 *.tmp
 
-# --- Env files & local secrets ---
-.env
-.env.*
-*.env
-*.env.*
-# Explicit known env files
-influxdb/.env.influx
-scripts/log-generator/.env.gen
 
 # --- Docker ---
 # Local overrides
