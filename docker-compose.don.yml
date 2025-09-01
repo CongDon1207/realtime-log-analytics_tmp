@@ -12,7 +12,7 @@ volumes:
 services:
   influxdb:
     image: influxdb:2.7
-    container_name: don-influxdb
+    container_name: influxdb
     ports:
       - "8086:8086"         # test local, cố định port
     env_file:
@@ -29,6 +29,6 @@ services:
       - influx-data:/var/lib/influxdb2
       - influx-config:/etc/influxdb2
       - ./influxdb/init:/init:ro
-      - ./scripts:/scripts:ro  
+      - ./influxdb:/scripts:ro  
     networks:
       - influx-net
