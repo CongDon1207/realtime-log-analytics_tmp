@@ -1,20 +1,49 @@
 #!/usr/bin/env bash
-# onboarding.sh — Init/verify InfluxDB: org & bucket (idempotent)
+# onboarding.sh — Khởi tạo/kiểm tra InfluxDB: org & bucket (idempotent)
+# Chạy tốt trên Git Bash/WSL/Linux.
+# Tác vụ chính:
+#   1) Health-check InfluxDB
+#   2) /api/v2/setup (an toàn, nếu đã init sẽ trả 422)
+#   3) Verify token (/api/v2/me)
+#   4) Lấy ORG_ID theo ORG_NAME (jq → python → sed fallback)
+#   5) Verify bucket theo org; nếu thiếu → tạo bucket với retention
+
 set -euo pipefail
 
-# --- Locate & load env ---
+############################################
+# 0) Định vị & nạp file .env.influx
+############################################
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../.env.influx"
-[[ -f "$ENV_FILE" ]] || { echo "[err] Missing $ENV_FILE"; exit 1; }
+[[ -f "$ENV_FILE" ]] || { echo "[err] Thiếu file env: $ENV_FILE"; exit 1; }
 # shellcheck disable=SC1091
 source "$ENV_FILE"
 
-# --- Derive URL if missing ---
-INFLUX_HOST="${INFLUX_HOST:-localhost}"
-HOST_HTTP_PORT="${HOST_HTTP_PORT:-8086}"
-INFLUX_URL="${INFLUX_URL:-http://${INFLUX_HOST}:${HOST_HTTP_PORT}}"
+############################################
+# 1) Hàm tiện ích & làm sạch biến môi trường
+############################################
 
-# --- Require variables ---
+# In thông báo thường
+say() { printf '%s\n' "$*"; }
+# In lỗi và thoát
+die() { printf '%s\n' "$*" >&2; exit 1; }
+
+# Loại bỏ CR (Windows \r) và khoảng trắng ở cuối — tránh lỗi khi build URL/query
+clean() { printf '%s' "$1" | tr -d '\r' | sed 's/[[:space:]]\+$//'; }
+
+# Làm sạch và gán mặc định nếu trống
+INFLUX_HOST="$(clean "${INFLUX_HOST:-localhost}")"
+HOST_HTTP_PORT="$(clean "${HOST_HTTP_PORT:-8086}")"
+INFLUX_URL="$(clean "${INFLUX_URL:-http://${INFLUX_HOST}:${HOST_HTTP_PORT}}")"
+
+ORG_NAME="$(clean "${ORG_NAME:-}")"
+BUCKET_NAME="$(clean "${BUCKET_NAME:-}")"
+RETENTION_HOURS="$(clean "${RETENTION_HOURS:-}")"
+ADMIN_USER="$(clean "${ADMIN_USER:-}")"
+ADMIN_PASSWORD="$(clean "${ADMIN_PASSWORD:-}")"
+ADMIN_TOKEN="$(clean "${ADMIN_TOKEN:-}")"
+
+# Kiểm tra biến bắt buộc
 : "${INFLUX_URL:?missing INFLUX_URL}"
 : "${ORG_NAME:?missing ORG_NAME}"
 : "${BUCKET_NAME:?missing BUCKET_NAME}"
@@ -25,14 +54,17 @@ INFLUX_URL="${INFLUX_URL:-http://${INFLUX_HOST}:${HOST_HTTP_PORT}}"
 
 RETENTION_SECONDS=$(( RETENTION_HOURS * 3600 ))
 
-say() { printf '%s\n' "$*"; }
-die() { printf '%s\n' "$*" >&2; exit 1; }
-
-# --- Health check ---
+############################################
+# 2) Health check InfluxDB
+############################################
 say "[onboarding] Health check @ ${INFLUX_URL} ..."
-curl -fsS "${INFLUX_URL}/health" | grep -q '"status":"pass"' || die "[err] InfluxDB not ready"
+curl -fsS "${INFLUX_URL}/health" | grep -q '"status":"pass"' || die "[err] InfluxDB chưa sẵn sàng"
 
-# --- Initial setup (safe, idempotent) ---
+############################################
+# 3) Gọi /api/v2/setup (idempotent)
+#    - Lần đầu: tạo org, bucket, user, và đặt admin token
+#    - Đã setup: trả 422 → coi như OK
+############################################
 say "[setup] POST /api/v2/setup (idempotent)"
 SETUP_CODE="$(curl -s -o /tmp/setup.out -w '%{http_code}' \
   -X POST "${INFLUX_URL}/api/v2/setup" \
@@ -46,48 +78,82 @@ case "$SETUP_CODE" in
 esac
 rm -f /tmp/setup.out || true
 
-# --- Verify token ---
+############################################
+# 4) Verify token có hiệu lực
+############################################
 say "[verify] Token → /api/v2/me"
 curl -fsS "${INFLUX_URL}/api/v2/me" -H "Authorization: Token ${ADMIN_TOKEN}" >/dev/null \
-  || die "[err] Token unauthorized. Use the token from UI → API Tokens."
+  || die "[err] Token không hợp lệ. Vào UI → Load Data → API Tokens để copy token đúng."
 
-# --- Verify org & get orgID ---
+############################################
+# 5) Lấy ORG_ID theo ORG_NAME (thuần shell, không cần jq/python)
+############################################
 say "[verify] Org → ${ORG_NAME}"
-ORG_JSON="$(curl -fsS "${INFLUX_URL}/api/v2/orgs?org=${ORG_NAME}" -H "Authorization: Token ${ADMIN_TOKEN}")"
-echo "$ORG_JSON" | grep -q "\"name\":\"${ORG_NAME}\"" || die "[err] Org not found: ${ORG_NAME}"
 
-if command -v jq >/dev/null 2>&1; then
-  ORG_ID="$(echo "$ORG_JSON" | jq -r '.orgs[0].id // empty')"
-else
-  # Fallback không cần jq: lấy id đầu tiên trong trả về
-  ORG_ID="$(echo "$ORG_JSON" | tr -d '\n' | grep -o '"id":"[^"]*"' | head -n1 | cut -d':' -f2 | tr -d '"')"
+# Gọi API lọc theo tên org để giảm ồn (KHÔNG dùng -f để tránh im lặng)
+ORG_JSON="$(curl -sS "${INFLUX_URL}/api/v2/orgs?org=${ORG_NAME}" \
+  -H "Authorization: Token ${ADMIN_TOKEN}")" || die "[err] curl /orgs lỗi"
+
+# Phòng hờ: nếu rỗng thì báo lỗi rõ ràng
+[ -n "$ORG_JSON" ] || die "[err] /api/v2/orgs trả rỗng. Kiểm tra lại ADMIN_TOKEN/INFLUX_URL."
+
+# Trích ORG_ID bằng sed (chấp nhận khoảng trắng)
+# Influx thường trả [{"id":"...","name":"demo-org",...}]
+ORG_ID="$(printf '%s' "$ORG_JSON" \
+  | tr -d '\n' \
+  | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+
+# Nếu vì layout khác không bắt được, thử fallback: gọi /orgs (không filter) rồi match name→id
+if [ -z "$ORG_ID" ]; then
+  ORG_ALL="$(curl -sS "${INFLUX_URL}/api/v2/orgs" -H "Authorization: Token ${ADMIN_TOKEN}")" \
+    || die "[err] curl /orgs (all) lỗi"
+  ORG_ID="$(printf '%s' "$ORG_ALL" \
+    | tr -d '\n' \
+    | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*"name"[[:space:]]*:[[:space:]]*"'$ORG_NAME'".*/\1/p')"
 fi
-[[ -n "${ORG_ID:-}" ]] || die "[err] Cannot extract orgID"
 
+[ -n "$ORG_ID" ] || { echo "[err] Không trích được ORG_ID cho ${ORG_NAME}"; echo "$ORG_JSON"; exit 1; }
 say "[verify] orgID=${ORG_ID}"
 
-# --- Verify bucket; create if missing ---
+
+############################################
+# 6) Verify bucket theo org; nếu thiếu → tạo
+############################################
 say "[verify] Bucket → ${BUCKET_NAME}"
 if curl -fsS -H "Authorization: Token ${ADMIN_TOKEN}" \
    "${INFLUX_URL}/api/v2/buckets?name=${BUCKET_NAME}&org=${ORG_NAME}" \
-   | grep -q "\"name\":\"${BUCKET_NAME}\""; then
+   | grep -q '"name"[[:space:]]*:[[:space:]]*"'${BUCKET_NAME}'"'; then
   say "[verify] bucket OK: ${BUCKET_NAME}"
 else
-  say "[create] Creating bucket: ${BUCKET_NAME} (retention ${RETENTION_SECONDS}s)"
+  say "[create] Tạo bucket: ${BUCKET_NAME} (retention ${RETENTION_SECONDS}s)"
+  # Dùng heredoc để tránh lỗi quote trên Git Bash
+  cat > /tmp/bucket.payload.json <<JSON
+{
+  "orgID": "${ORG_ID}",
+  "name": "${BUCKET_NAME}",
+  "retentionRules": [
+    { "type": "expire", "everySeconds": ${RETENTION_SECONDS} }
+  ]
+}
+JSON
+
   CREATE_CODE="$(curl -s -o /tmp/bucket.out -w '%{http_code}' \
     -X POST "${INFLUX_URL}/api/v2/buckets" \
     -H "Authorization: Token ${ADMIN_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "{
-          \"orgID\":\"${ORG_ID}\",
-          \"name\":\"${BUCKET_NAME}\",
-          \"retentionRules\":[{\"type\":\"expire\",\"everySeconds\":${RETENTION_SECONDS}}]
-        }")" || true
+    -d @/tmp/bucket.payload.json)" || true
+
   case "$CREATE_CODE" in
-    200|201) say "[create] bucket created: ${BUCKET_NAME}";;
-    *)       cat /tmp/bucket.out; die "[err] create bucket HTTP $CREATE_CODE";;
+    200|201) say "[create] Bucket created: ${BUCKET_NAME}";;
+    409)     say "[create] Bucket đã tồn tại (409) — có thể tên trùng, khác org";;
+    401|403) cat /tmp/bucket.out 1>&2 || true; rm -f /tmp/bucket.out /tmp/bucket.payload.json || true; die "[err] Token không đủ quyền tạo bucket trong org ${ORG_NAME}.";;
+    *)       cat /tmp/bucket.out 1>&2 || true; rm -f /tmp/bucket.out /tmp/bucket.payload.json || true; die "[err] Tạo bucket lỗi HTTP $CREATE_CODE";;
   esac
-  rm -f /tmp/bucket.out || true
+
+  rm -f /tmp/bucket.out /tmp/bucket.payload.json || true
 fi
 
+############################################
+# 7) Hoàn tất
+############################################
 say "[done] Influx ready: org=${ORG_NAME} (id=${ORG_ID}), bucket=${BUCKET_NAME}"
