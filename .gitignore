@@ -67,3 +67,10 @@ docker-compose.*.local.yml
 
 # --- OS-specific trash (Windows) ---
 $RECYCLE.BIN/
+
+
+#file md
+RULES.md
+PROMPT.md
+.ai-prompt
+
