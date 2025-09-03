@@ -67,3 +67,20 @@ docker-compose.*.local.yml
 
 # --- OS-specific trash (Windows) ---
 $RECYCLE.BIN/
+
+# --- Flume runtime state ---
+data/flume/**/checkpoint/
+data/flume/**/data/
+data/flume/**/taildir_position.json
+
+# --- Nginx test logs ---
+data/logs/
+
+# --- Flume file sink output (for local test only) ---
+data/out/
+
+#file md
+RULES.md
+PROMPT.md
+.ai-prompt
+
