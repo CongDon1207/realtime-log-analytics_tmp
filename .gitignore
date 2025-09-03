@@ -78,3 +78,9 @@ data/logs/
 
 # --- Flume file sink output (for local test only) ---
 data/out/
+
+#file md
+RULES.md
+PROMPT.md
+.ai-prompt
+
