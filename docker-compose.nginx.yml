@@ -12,6 +12,7 @@ services:
       timeout: 2s
       retries: 5
       start_period: 5s
+    networks: [appnet]
 
   nginx-web2:
     image: nginx:1.25
@@ -26,6 +27,7 @@ services:
       timeout: 2s
       retries: 5
       start_period: 5s
+    networks: [appnet]
 
   nginx-web3:
     image: nginx:1.25
@@ -40,3 +42,8 @@ services:
       timeout: 2s
       retries: 5
       start_period: 5s
+    networks: [appnet]
+
+networks:
+  appnet:
+    external: true
