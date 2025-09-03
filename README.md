@@ -24,6 +24,14 @@ Giải pháp **giám sát & phân tích log real-time** cho web servers:
 </div>
 
 ---
+## 📊 Luồng dữ liệu log
+
+<div align="center">
+  <img src="docs/log-pipeline.jpg" alt="Log Data Pipeline" width="1000"><br/>
+  <em>Hình 2. Luồng dữ liệu từ Nginx log đến Grafana</em>
+</div>
+
+---
 
 ## 🧰 Công nghệ sử dụng
 
