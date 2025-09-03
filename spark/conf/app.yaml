@@ -1,0 +1,7 @@
+window:
+  duration: "10 seconds"
+  watermark: "1 minute"
+
+thresholds:
+  error_rate: 0.1
+  latency_ms: 200
