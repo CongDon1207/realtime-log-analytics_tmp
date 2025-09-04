@@ -3,7 +3,8 @@ version: '3.9'
 services:
   spark-master:
     build:
-      context: ./spark
+      context: ./spark   # thư mục chứa Dockerfile + requirements.txt
+    image: my-spark:3.5.0
     container_name: spark-master
     hostname: spark-master
     environment:
@@ -18,11 +19,10 @@ services:
     volumes:
       - ./spark/src:/opt/spark/app/src
       - ./spark/conf:/opt/spark/app/conf
-      - /tmp:/tmp  # fix Ivy
+      - /tmp:/tmp
 
   spark-worker:
-    build:
-      context: ./spark
+    image: my-spark:3.5.0   # dùng lại image đã build
     container_name: spark-worker
     hostname: spark-worker
     environment:
