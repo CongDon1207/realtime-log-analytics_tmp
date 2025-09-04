@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-BOOTSTRAP="localhost:9092"
+BOOTSTRAP="kafka:9092"
+
+
 
 
 # Danh sách topic muốn tạo: topic_name:partitions:replication_factor
