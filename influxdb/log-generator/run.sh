@@ -10,7 +10,7 @@ py -3.9 log_generator.py \
     --org "$ORG_NAME" \
     --bucket "$BUCKET_NAME" \
     --token "$INFLUX_TOKEN" \
-    --duration "${1:-60}" \
+    --duration "${1:-20}" \
     --qps "${2:-80}" \
     --hosts "${3:-3}" \
     --window "${4:-10}" \
