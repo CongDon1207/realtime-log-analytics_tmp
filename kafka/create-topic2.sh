@@ -8,8 +8,8 @@ BOOTSTRAP="kafka:9092"
 
 # Danh sách topic muốn tạo: topic_name:partitions:replication_factor
 TOPICS=(
-  "web-logs:3:1"
-  "web-errors:3:1"
+  "t-web-logs:3:1"
+  "t-web-errors:3:1"
   # Thêm topic khác ở đây
 )
 
