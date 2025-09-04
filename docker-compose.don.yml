@@ -1,0 +1,34 @@
+
+name: realtime-log-analytics-don
+
+networks:
+  influx-net:
+    driver: bridge
+
+volumes:
+  influx-data:
+  influx-config:
+
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"         # test local, cố định port
+    env_file:
+      - ./influxdb/.env.influx
+    environment:
+      - TZ=${TZ:-UTC}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8086/health"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - influx-data:/var/lib/influxdb2
+      - influx-config:/etc/influxdb2
+      - ./influxdb/init:/init:ro
+      - ./influxdb:/scripts:ro  
+    networks:
+      - influx-net

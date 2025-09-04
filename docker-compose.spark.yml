@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  spark-master:
+    build:
+      context: ./spark
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - HOME=/tmp
+    ports:
+      - "7077:7077"   # Spark master port
+      - "8080:8080"   # Spark UI
+    networks:
+      - spark-network
+    volumes:
+      - ./spark/src:/opt/spark/app/src
+      - ./spark/conf:/opt/spark/app/conf
+      - /tmp:/tmp  # fix Ivy
+
+  spark-worker:
+    build:
+      context: ./spark
+    container_name: spark-worker
+    hostname: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - HOME=/tmp
+    depends_on:
+      - spark-master
+    networks:
+      - spark-network
+    volumes:
+      - ./spark/src:/opt/spark/app/src
+      - ./spark/conf:/opt/spark/app/conf
+      - /tmp:/tmp
+
+networks:
+  spark-network:
+    driver: bridge
