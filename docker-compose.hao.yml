@@ -2,6 +2,9 @@ version: '3.8'
 
 services:
   kafka:
+    build:
+      context: ./kafka
+      dockerfile: DockerFile
     image: bitnami/kafka:3.5.1
     container_name: kafka
     ports:
@@ -22,13 +25,13 @@ services:
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
       KAFKA_BROKER_WAIT_RETRIES: 60
       KAFKA_BROKER_WAIT_SLEEP: 5
-    volumes:
-      - kafka_data:/bitnami/kafka
-      - .kafka/scripts:/docker-entrypoint-initdb.d
+    #volumes:
+      #- kafka_data:/bitnami/kafka
+      #- ./kafka/scripts:/docker-entrypoint-initdb.d
     networks:
       - data_network
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "9092"]
+      test: ["CMD", "nc", "-z", "kafka", "9092"]
       interval: 15s
       retries: 20
       timeout: 10s
