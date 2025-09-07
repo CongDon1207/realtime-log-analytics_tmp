@@ -9,7 +9,7 @@
 * **Code only what was asked.** Follow PRD/ticket strictly. No extra features.
 * **Minimum viable change.** Choose **one** simplest approach that works; do **not** implement multiple solutions.
 * **Short code only.** Keep code concise and readable; avoid over-engineering and deep nesting.
-* **Reuse before rewrite.** Prefer existing modules/utilities; no duplication.
+* **Reuse before rewrite.** Always reuse existing modules or utilities before writing new ones; avoid duplicate code at all costs.
 * **One-off scripts stay out of main.** Put them in `scripts/` with run instructions.
 * **File length limit:** 200–300 LOC. If exceeded → refactor/split.
 * **Naming & logging:** clear names; logs short with context.
@@ -19,10 +19,11 @@
 
 ## 🎯 Philosophy (Non‑negotiables)
 
-* **Do not create unnecessary files/modules.**
-* **Do not change architecture/pattern** unless absolutely required and justified.
-* **Do not touch unrelated code.**
-* **Prefer readability and easy maintenance** over cleverness.
+No unnecessary files/modules.
+
+No architecture/pattern changes unless strictly required and justified.
+
+Prefer readability & maintainability over clever tricks.
 
 ---
 
@@ -32,29 +33,12 @@
 * Before starting new → **kill all related old processes**.
 * **Do not overwrite `.env`** accidentally. Keep `.env.sample` for reference. If replacing `.env`, **delete the old one** (no duplicates).
 
-**Reference commands (adjust per stack):**
-
-```bash
-# Docker Compose
-docker compose down --remove-orphans
-docker compose up -d --build
-
-# Unix kill by port (e.g., 8080)
-lsof -ti:8080 | xargs -r kill -9
-
-# Windows kill by port (PowerShell)
-Get-Process -Id (Get-NetTCPConnection -LocalPort 8080).OwningProcess | Stop-Process -Force
-```
-
----
 
 ## 🧩 Structure & Pattern
 
 * **Reuse-first.** Avoid new modules unless necessary.
 * If replacing tech/pattern while fixing a bug → **remove the old version completely** after migration; no parallel duplicates.
 * **Repo layout** (adapt to current standard):
-
-  * `src/` — main code
   * `scripts/` — one-off utilities
   * `docs/` — documentation
   * `fixes/` — bug notes
