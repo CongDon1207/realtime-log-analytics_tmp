@@ -15,6 +15,10 @@ Kafka Topics (web-logs, web-errors)
 ```
 
 ## Các bước khởi chạy Pipeline
+### 0. Tạo network trước
+```bash
+docker network create appnet
+```
 
 ### 1. Khởi động Kafka
 ```bash
@@ -27,11 +31,9 @@ docker-compose -f docker-compose.hao.yml ps
 
 ### 2. Tạo Topics Kafka
 ```bash
-# Tạo topic cho access logs
-docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic web-logs --partitions 3 --replication-factor 1"
-
-# Tạo topic cho error logs  
-docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic web-errors --partitions 3 --replication-factor 1"
+# Tạo (hoặc recreate) các topic bằng script helper có sẵn trong container
+# Script sẽ xóa (nếu có) rồi tạo lại `web-logs` và `web-errors` một cách an toàn.
+bash kafka/create-topic2.sh
 
 # Xem danh sách topics
 docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list"
@@ -59,7 +61,7 @@ docker-compose -f docker-compose.flume.yml ps
 
 ### 1. Generate Access Logs
 ```bash
-# Tạo 10 requests thành công đến /api endpoint
+# Tạo 10 requests loi đến /api endpoint
 for i in {1..10}; do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/api; done
 ```
 
@@ -105,12 +107,7 @@ docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-console-consumer.sh 
 
 ## Kiểm tra trạng thái
 
-### Kiểm tra Flume Collector đang lắng nghe:
-```bash
-# Lệnh netstat không khả dụng trong container hiện tại
-# Thay vào đó kiểm tra logs để xác nhận
-docker logs flume-collector | grep -i "started\|listening\|bind"
-```
+
 
 ### Kiểm tra các Nginx container có thể tạo logs:
 ```bash
@@ -124,16 +121,7 @@ docker exec web2 sh -c "tail -5 /var/log/nginx/error.log"
 docker exec web3 sh -c "tail -5 /var/log/nginx/error.log"
 ```
 
-### Kiểm tra logs Flume:
-```bash
-# Logs của collector
-docker logs flume-collector
 
-# Logs của agents
-docker logs flume-agent-web1
-docker logs flume-agent-web2  
-docker logs flume-agent-web3
-```
 
 ### Kiểm tra Kafka topics:
 ```bash
@@ -189,6 +177,41 @@ docker-compose -f docker-compose.don.yml ps influxdb
 bash influxdb/init/onboarding.sh
 ```
 
+#### ⚠️ Lưu ý quan trọng cho lần đầu setup InfluxDB:
+
+> **Chỉ thực hiện 1 lần duy nhất** khi khởi tạo InfluxDB lần đầu tiên.
+
+**Các bước thực hiện:**
+
+1. **Truy cập InfluxDB UI**: Mở trình duyệt và vào `http://localhost:8086`
+
+2. **Đăng nhập hệ thống**:
+   - Username: `admin`  
+   - Password: `admin12345`
+
+3. **Tạo API Token mới**:
+   - Sau khi đăng nhập, click vào **biểu tượng mũi tên ↗** (Load Data) ở sidebar trái
+   - Chọn **API Tokens** từ menu
+   - **Xóa token cũ** (nếu có) bằng cách click vào token và chọn Delete
+   - Click **Generate API Token** → **All Access API Token**
+   - Đặt tên cho token (ví dụ: `spark-streaming-token`)
+   - **Copy token** vừa được tạo
+
+4. **Cập nhật file cấu hình**:
+   - Mở file `.env` ở thư mục root của project
+   - Thay thế giá trị `INFLUX_TOKEN` bằng token vừa copy
+   
+   ```bash
+   # Ví dụ format trong file .env:
+   INFLUX_TOKEN=DHxxYj3F83RYX4vZwj7Ftebb1jpKJnR0ylu96ZGH9BvvQT3hkmPs9V73r6c3uOKpS2fulZ76DlYnmFlL9rFLqQ==
+   ```
+
+5. **Kiểm tra kết nối**: 
+   ```bash
+   source .env && curl -I -H "Authorization: Token $INFLUX_TOKEN" http://localhost:8086/ping
+   ```
+
+> 💡 **Ghi chú**: Token này sẽ được sử dụng bởi Spark streaming job để ghi dữ liệu vào InfluxDB. Không chia sẻ token này với người khác.
 ### Bước 2: Kiểm tra cấu hình InfluxDB
 ```bash
 # Kiểm tra InfluxDB API có sẵn sàng
@@ -213,23 +236,14 @@ docker logs spark-master | tail -10
 
 ### Bước 4: Chạy Spark Streaming job
 ```bash
-# Chạy streaming job để xử lý logs từ Kafka → InfluxDB (không cần --packages nhờ spark-defaults.conf)
-source .env && docker exec -e INFLUX_URL="$INFLUX_URL" -e INFLUX_TOKEN="$INFLUX_TOKEN" -e INFLUX_ORG="$INFLUX_ORG" -e INFLUX_BUCKET="$INFLUX_BUCKET" spark-master bash -c "cd /opt/spark/app && /opt/bitnami/spark/bin/spark-submit --master spark://spark-master:7077 src/python/stream_access.py" &
+# Lệnh ngắn gọn (tự nạp .env, chạy 70–75s rồi dừng)
+bash scripts/run_access_stream.sh
 
-# Hoặc chạy trong background với timeout (để test)
-# source .env && timeout 30s docker exec -e INFLUX_URL="$INFLUX_URL" -e INFLUX_TOKEN="$INFLUX_TOKEN" -e INFLUX_ORG="$INFLUX_ORG" -e INFLUX_BUCKET="$INFLUX_BUCKET" spark-master bash -c "cd /opt/spark/app && /opt/bitnami/spark/bin/spark-submit --master spark://spark-master:7077 src/python/stream_access.py"
+#Hoặc ép timeout:
+set -a; . .env; set +a; docker exec -e INFLUX_URL -e INFLUX_TOKEN -e INFLUX_ORG -e INFLUX_BUCKET -e ENV_TAG -e WINDOW_DURATION -e WATERMARK -e CHECKPOINT_DIR spark-master bash -lc 'timeout 75s /opt/bitnami/spark/bin/spark-submit --master spark://spark-master-influx:7077 /opt/spark/app/src/python/stream_access.py'
 ```
 
-### Bước 5: Test pipeline với dữ liệu mẫu
-```bash
-# Tạo dữ liệu test logs bằng manual input vào Kafka
-echo '{"event_time": 1725876100, "hostname": "web1", "method": "GET", "path": "/api/users", "status": 200, "remote": "192.168.1.100", "rt": 0.045, "user_agent": "Mozilla/5.0"}
-{"event_time": 1725876101, "hostname": "web2", "method": "POST", "path": "/api/login", "status": 201, "remote": "10.0.0.5", "rt": 0.120, "user_agent": "curl"}
-{"event_time": 1725876102, "hostname": "web1", "method": "GET", "path": "/api/data", "status": 500, "remote": "192.168.1.200", "rt": 2.500, "user_agent": "Python"}' | docker exec -i kafka kafka-console-producer.sh --broker-list localhost:9092 --topic web-logs
 
-# Hoặc sử dụng real Nginx logs từ pipeline phần đầu
-# for i in {1..10}; do curl -s -o /dev/null http://localhost:8081/api; done
-```
 
 ### Output và measurements InfluxDB
 
@@ -250,19 +264,8 @@ Pipeline sẽ tạo ra 3 measurements trong InfluxDB:
 - **Fields**: `ip` (IP address), `count` (số requests), `score` (điểm bất thường)
 - **Time**: `window_end`
 
-### Kiểm tra kết quả
 
-#### Kiểm tra Spark Streaming hoạt động:
-```bash
-# Xem logs Spark job (filter cho các thông tin quan trọng)
-docker logs spark-master 2>/dev/null | grep -E "(SUCCESS|Wrote.*lines|InfluxDB|Exception|ERROR)" | tail -10
 
-# Kiểm tra Spark UI (chỉ khi streaming đang chạy)
-echo "Spark UI: http://localhost:4040"
-
-# Kiểm tra streaming job status
-docker logs spark-master --tail 20 | grep -E "(MicroBatchExecution|Stream started)"
-```
 
 #### Kiểm tra dữ liệu trong InfluxDB:
 ```bash
