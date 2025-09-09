@@ -80,8 +80,9 @@ data/logs/
 data/out/
 
 #file md
-RULES.md
 PROMPT.md
 AGENTS.md
 .ai-prompt
+
+
 
