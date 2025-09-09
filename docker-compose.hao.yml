@@ -30,6 +30,7 @@ services:
       #- ./kafka/scripts:/docker-entrypoint-initdb.d
     networks:
       - data_network
+      - appnet
     healthcheck:
       test: ["CMD", "nc", "-z", "kafka", "9092"]
       interval: 15s
@@ -43,3 +44,5 @@ networks:
   data_network:
     driver: bridge
     name: data_network
+  appnet:   
+    external: true
