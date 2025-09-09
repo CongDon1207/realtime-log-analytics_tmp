@@ -1,3 +1,21 @@
+# H����>ng d���n Pipeline: Nginx �+' Flume �+' Kafka
+
+## T��ng quan
+Pipeline nA�y thu th��-p logs t��� cA�c web servers ### Kiểm tra logs Flume:
+```bash
+# Logs của collector
+docker logs flume-collector
+
+# Logs của agents
+docker logs flume-agent-web1
+docker logs flume-agent-web2  
+docker logs flume-agent-web3
+```
+
+### Kiểm tra Kafka topics:
+```bash
+# Liệt kê topics��ng Apache Flume �`��� stream d��_ li���u, vA� �`��a vA�o Apache Kafka �`��� l��u tr��_ vA� x��- lA�.
+
 # Hướng dẫn Pipeline: Nginx → Flume → Kafka
 
 ## Tổng quan
@@ -15,6 +33,8 @@ Kafka Topics (web-logs, web-errors)
 ```
 
 ## Các bước khởi chạy Pipeline
+
+## CA�c b����>c kh��Yi ch���y Pipeline
 
 ### 1. Khởi động Kafka
 ```bash
@@ -124,20 +144,20 @@ docker exec web2 sh -c "tail -5 /var/log/nginx/error.log"
 docker exec web3 sh -c "tail -5 /var/log/nginx/error.log"
 ```
 
-### Kiểm tra logs Flume:
+### Ki���m tra logs Flume:
 ```bash
-# Logs của collector
+# Logs c��a collector
 docker logs flume-collector
 
-# Logs của agents
+# Logs c��a agents
 docker logs flume-agent-web1
 docker logs flume-agent-web2  
 docker logs flume-agent-web3
 ```
 
-### Kiểm tra Kafka topics:
+### Ki���m tra Kafka topics:
 ```bash
-# Liệt kê topics
+# Li���t kA� topics
 docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list"
 
 # Xem thông tin chi tiết topic
@@ -177,146 +197,35 @@ Pipeline hoạt động thành công với luồng:
 
 ## Spark Structured Streaming (access → metrics/anomaly → InfluxDB)
 
-### Bước 1: Khởi động InfluxDB
+### Khởi chạy Spark cluster
 ```bash
-# Khởi động InfluxDB service
-make up-influx
-
-# Kiểm tra InfluxDB đã chạy
-docker-compose -f docker-compose.don.yml ps influxdb
-
-# Khởi tạo org/bucket (chỉ chạy 1 lần)
-make init-influx
-```
-
-### Bước 2: Kiểm tra cấu hình InfluxDB
-```bash
-# Kiểm tra InfluxDB API có sẵn sàng
-curl -I http://localhost:8086/ping
-
-# Kiểm tra cấu hình từ file .env
-source .env && echo "ORG: $INFLUX_ORG, BUCKET: $INFLUX_BUCKET"
-
-# Kiểm tra token từ file influxdb/.env.influx  
-source influxdb/.env.influx && echo "ADMIN_TOKEN có sẵn: ${ADMIN_TOKEN:0:20}..."
-```
-
-### Bước 3: Khởi chạy Spark cluster
-```bash
-# Khởi động Spark cluster (master + worker)
 make up-spark
-
-# Kiểm tra Spark cluster
-docker-compose -f docker-compose.spark.yml ps
-docker logs spark-master | tail -10
 ```
 
-### Bước 4: Chạy Spark Streaming job
+### Chạy job Streaming (đọc Kafka → chuẩn hóa → cửa sổ 10s/2m → ghi InfluxDB)
 ```bash
-# Đảm bảo đã có file .env với cấu hình đúng
-ls -la .env
+# 1) Tạo file .env từ mẫu và điền INFLUX_TOKEN (nếu dùng auth)
+cp -n .env.sample .env || true
 
-# Chạy streaming job để xử lý logs từ Kafka → InfluxDB
+# 2) Chạy job
 make run-stream-access
-
-# Theo dõi logs real-time
-docker logs -f spark-master
-```
-
-### Bước 5: Test pipeline với dữ liệu mẫu
-```bash
-# Tạo dữ liệu test logs và gửi vào Kafka
-source influxdb/.env.influx && timeout 30s python influxdb/log-generator/log_generator.py --duration 30 --qps 2 --token $ADMIN_TOKEN | docker exec -i kafka kafka-console-producer.sh --broker-list localhost:9092 --topic web-logs
 ```
 
 ### Output và measurements InfluxDB
+- `http_stats` (tags: `env, hostname, method`; fields: `count, rps, avg_rt, max_rt, err_rate`; time = `window_end`).
+- `top_urls` (tags: `env, hostname, status, path`; field: `count`; time = `window_end`).
+- `anomaly` (tags: `env, hostname, kind`; fields: `ip, count, score`; time = `window_end`).
 
-Pipeline sẽ tạo ra 3 measurements trong InfluxDB:
+Gợi ý truy vấn Top-N (lọc ở Grafana/Flux): sắp xếp `count` giảm dần, `limit N` theo mỗi `window_end`.
 
-#### 1. `http_stats` - Thống kê HTTP theo cửa sổ thời gian
-- **Tags**: `env`, `hostname`, `method` 
-- **Fields**: `count` (tổng requests), `rps` (requests/second), `avg_rt` (response time trung bình), `max_rt` (response time tối đa), `err_rate` (tỷ lệ lỗi %)
-- **Time**: `window_end` (kết thúc cửa sổ 10 giây)
-
-#### 2. `top_urls` - Top URLs được truy cập nhiều nhất
-- **Tags**: `env`, `hostname`, `status`, `path`
-- **Fields**: `count` (số lần truy cập)
-- **Time**: `window_end`
-
-#### 3. `anomaly` - Phát hiện bất thường
-- **Tags**: `env`, `hostname`, `kind` (loại bất thường)
-- **Fields**: `ip` (IP address), `count` (số requests), `score` (điểm bất thường)
-- **Time**: `window_end`
-
-### Kiểm tra kết quả
-
-#### Kiểm tra Spark Streaming hoạt động:
-```bash
-# Xem logs Spark job
-docker logs -f spark-master | grep -E "(Batch|records|InfluxDB|Exception)"
-
-# Kiểm tra Spark UI
-echo "Spark UI: http://localhost:4040"
-```
-
-#### Kiểm tra dữ liệu trong InfluxDB:
-```bash
-# Truy cập InfluxDB UI
-echo "InfluxDB UI: http://localhost:8086"
-echo "Org: primary, Bucket: logs"
-
-# Hoặc sử dụng Flux query từ command line
-source influxdb/.env.influx && influx query --org primary --token $ADMIN_TOKEN 'from(bucket: "logs") |> range(start: -1h) |> limit(n: 10)'
-```
-
-#### Sử dụng Flux script có sẵn:
-```bash
-# Chạy verify script để kiểm tra measurements
-influx query --org primary --token $ADMIN_TOKEN --file influxdb/verify.flux
-```
-
-### Troubleshooting
-
-#### Lỗi kết nối Spark Worker:
-```bash
-# Restart lại Spark cluster
-make down-spark
-make up-spark
-
-# Kiểm tra network
-docker network ls | grep appnet
-```
-
-#### Lỗi InfluxDB connection:
-```bash
-# Kiểm tra InfluxDB service
-docker-compose -f docker-compose.don.yml ps influxdb
-
-# Kiểm tra logs InfluxDB
-docker logs influxdb | tail -20
-
-# Test kết nối thủ công
-curl -I http://localhost:8086/ping
-```
-
-#### Không có dữ liệu trong InfluxDB:
-```bash
-# Kiểm tra Kafka có messages
-docker exec kafka kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic web-logs --max-messages 5
-
-# Kiểm tra Spark job có chạy
-docker logs spark-master | grep "stream_access.py"
-
-# Kiểm tra cấu hình environment variables
-source .env && env | grep -E "(INFLUX|WINDOW|CHECKPOINT)"
-```
+### Kiểm tra nhanh
+- Kiểm tra logs Spark: `docker logs -f spark-master`
+- Kiểm tra Influx write: truy cập InfluxDB UI hoặc dùng Flux script `influxdb/verify.flux` (nếu có).
 
 ### Ghi chú performance
-- Image Spark đã được "prefetch" với gói Kafka (`spark-sql-kafka-0-10`) để giảm thời gian khởi động
-- Cấu hình `spark.jars.packages` trong `spark/conf/spark-defaults.conf`
-- Checkpoint được lưu tại `/tmp/spark-checkpoints` để đảm bảo fault tolerance
+- Ảnh Spark đã được “prefetch” gói Kafka (`spark-sql-kafka-0-10`) trong lúc build để giảm thời gian `spark-submit` lần đầu.
+- `spark.jars.packages` được khai báo trong `spark/conf/spark-defaults.conf`, nên không cần truyền `--packages` khi chạy.
 
 ### Ghi chú thiết kế
-- Cửa sổ thời gian: 10 giây với watermark 2 phút để xử lý late events
-- `err_rate` tính trên tổng requests theo (hostname, method) mỗi cửa sổ
-- Top URLs tính sẵn theo (hostname, status, path), filtering Top-N thực hiện ở visualization layer
+- `err_rate` được tính trên tổng request mỗi (hostname, method) theo từng cửa sổ để tránh join phức tạp giữa các lớp status.
+- Top-N URL được tính sẵn theo (hostname, status, path); phần chọn Top-N thực hiện ở lớp hiển thị để tối giản xử lý stateful.

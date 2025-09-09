@@ -22,6 +22,7 @@
 ### Constraints
 
 * No new files unless mandatory; if added, specify reason and files replaced/deleted.
+* Any files created solely for testing must be deleted after the tests are completed.
 * Do not alter architecture/patterns unless essential.
 * Patch >300 lines: pause and propose refactor/split plan before proceeding.
 * Language: Vietnamese for explanations; keep logs/errors/commands in original context.

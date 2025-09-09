@@ -1,6 +1,6 @@
 // verify.flux — báo cáo xác minh pipeline `http_requests`
-// Thay 'http-logs' nếu bucket của bạn khác
-bucketName = "http-logs"
+// Thay 'logs' theo bucket đã cấu hình
+bucketName = "logs"
 
 // A) Tổng RPS 1 phút
 rps_total_1m = from(bucket: bucketName)
