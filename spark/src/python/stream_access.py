@@ -14,13 +14,25 @@ from access_schema import ACCESS_RAW_SCHEMA, normalize_access_df  # noqa: E402
 
 try:
     from influxdb_client import InfluxDBClient, WriteOptions
+    try:
+        from influxdb_client.client.write_api import SYNCHRONOUS
+    except Exception:
+        SYNCHRONOUS = None  # type: ignore
 except Exception:  # client không có sẵn (chạy thử console)
     InfluxDBClient = None  # type: ignore
     WriteOptions = None  # type: ignore
 
 
 def build_spark(app_name: str = "AccessStream") -> SparkSession:
-    return SparkSession.builder.appName(app_name).getOrCreate()
+    # Ép dùng LZ4 để tránh phụ thuộc native zstd-jni
+    io_codec = os.getenv("SPARK_IO_CODEC", "lz4")
+    mapstatus_codec = os.getenv("SPARK_MAPSTATUS_CODEC", "lz4")
+    return (
+        SparkSession.builder.appName(app_name)
+        .config("spark.io.compression.codec", io_codec)
+        .config("spark.shuffle.mapStatus.compression.codec", mapstatus_codec)
+        .getOrCreate()
+    )
 
 
 def _parse_seconds(text: str) -> int:
@@ -44,8 +56,12 @@ def _escape_tag(v: str) -> str:
 
 
 def _write_influx(df, batch_id: int, measurement: str, tags: List[str], fields: List[str], ts_col: str):
-    if df.rdd.isEmpty():
-        return
+    try:
+        if df.rdd.isEmpty():
+            return
+    except Exception as e:
+        print(f"Warning: Cannot check DataFrame.isEmpty(): {e}")
+        # Tiếp tục xử lý, có thể DataFrame không rỗng
 
     url = os.getenv("INFLUX_URL", "http://influxdb:8086")
     token = os.getenv("INFLUX_TOKEN", "")
@@ -94,13 +110,102 @@ def _write_influx(df, batch_id: int, measurement: str, tags: List[str], fields: 
         return
 
     if InfluxDBClient is None:
-        print("\n".join(lines))
+        print(f"DEBUG: InfluxDB client not available, would write {len(lines)} lines:")
+        for line in lines[:3]:  # Show first 3 lines as sample
+            print(f"  {line}")
+        if len(lines) > 3:
+            print(f"  ... and {len(lines)-3} more lines")
         return
 
     with InfluxDBClient(url=url, token=token, org=org) as client:
-        write_api = client.write_api(write_options=WriteOptions(batch_size=500, flush_interval=1000))
+        if 'SYNCHRONOUS' in globals() and SYNCHRONOUS is not None:
+            write_api = client.write_api(write_options=SYNCHRONOUS)
+        elif WriteOptions is not None:
+            write_api = client.write_api(write_options=WriteOptions(batch_size=500, flush_interval=1000))
+        else:
+            write_api = client.write_api()
         write_api.write(bucket=bucket, org=org, record=lines)
+        print(f"SUCCESS: Wrote {len(lines)} lines to InfluxDB bucket '{bucket}'")
 
+
+def build_stats_df(access_df, win_str: str, watermark_str: str, win_s: int):
+    """Tạo DataFrame thống kê http_stats từ access_df.
+
+    Trả về các cột: hostname, method, count, avg_rt, max_rt, rps, err_rate, window_end
+    """
+    base = access_df.withWatermark("event_time", watermark_str) if getattr(access_df, "isStreaming", False) else access_df
+    return (
+        base
+        .groupBy(F.window("event_time", win_str).alias("w"), F.col("hostname"), F.col("method"))
+        .agg(
+            F.count(F.lit(1)).alias("count"),
+            F.avg("rt").alias("avg_rt"),
+            F.max("rt").alias("max_rt"),
+            F.sum(F.when((F.col("status") >= 400) & (F.col("status") <= 599), 1).otherwise(0)).alias("err_count"),
+        )
+        .withColumn("rps", F.col("count") / F.lit(win_s))
+        .withColumn("err_rate", F.when(F.col("count") > 0, F.col("err_count") / F.col("count")).otherwise(F.lit(0.0)))
+        .withColumn("window_end", F.col("w").getField("end"))
+        .drop("w")
+    )
+
+
+def build_top_urls_df(access_df, win_str: str, watermark_str: str):
+    """Tạo DataFrame top_urls (đếm theo hostname, status, path)."""
+    base = access_df.withWatermark("event_time", watermark_str) if getattr(access_df, "isStreaming", False) else access_df
+    return (
+        base
+        .groupBy(F.window("event_time", win_str).alias("w"), F.col("hostname"), F.col("status"), F.col("path"))
+        .agg(F.count(F.lit(1)).alias("count"))
+        .withColumn("window_end", F.col("w").getField("end"))
+        .drop("w")
+    )
+
+
+def build_anomalies_df(access_df, win_str: str, watermark_str: str,
+                       ip_threshold: int, scan_threshold: int, err_rate_threshold: float):
+    """Tạo DataFrame anomalies gồm 3 loại: ip_spike, error_surge, scan."""
+    base = access_df.withWatermark("event_time", watermark_str) if getattr(access_df, "isStreaming", False) else access_df
+    ip_spike = (
+        base
+        .groupBy(F.window("event_time", win_str).alias("w"), F.col("hostname"), F.col("remote").alias("ip"))
+        .agg(F.count(F.lit(1)).alias("count"))
+        .where(F.col("count") >= F.lit(ip_threshold))
+        .withColumn("kind", F.lit("ip_spike"))
+        .withColumn("score", F.col("count") / F.lit(ip_threshold))
+        .withColumn("window_end", F.col("w").getField("end"))
+        .drop("w")
+    )
+
+    err_surge = (
+        base
+        .groupBy(F.window("event_time", win_str).alias("w"), F.col("hostname"))
+        .agg(
+            F.count(F.lit(1)).alias("count"),
+            F.sum(F.when((F.col("status") >= 500) & (F.col("status") <= 599), 1).otherwise(0)).alias("err5xx"),
+        )
+        .withColumn("err_rate", F.when(F.col("count") > 0, F.col("err5xx") / F.col("count")).otherwise(F.lit(0.0)))
+        .where(F.col("err_rate") >= F.lit(err_rate_threshold))
+        .withColumn("ip", F.lit(""))
+        .withColumn("kind", F.lit("error_surge"))
+        .withColumn("score", F.col("err_rate"))
+        .withColumn("window_end", F.col("w").getField("end"))
+        .select("hostname", "ip", "kind", "count", "score", "window_end")
+    )
+
+    scan = (
+        base
+        .groupBy(F.window("event_time", win_str).alias("w"), F.col("hostname"), F.col("remote").alias("ip"))
+        .agg(F.approx_count_distinct("path").alias("distinct_paths"))
+        .where(F.col("distinct_paths") >= F.lit(scan_threshold))
+        .withColumn("kind", F.lit("scan"))
+        .withColumn("count", F.col("distinct_paths"))
+        .withColumn("score", F.col("distinct_paths") / F.lit(scan_threshold))
+        .withColumn("window_end", F.col("w").getField("end"))
+        .select("hostname", "ip", "kind", "count", "score", "window_end")
+    )
+
+    return ip_spike.unionByName(err_surge).unionByName(scan)
 
 def main():
     # Kafka
@@ -124,6 +229,7 @@ def main():
         .option("kafka.bootstrap.servers", kafka_bootstrap)
         .option("subscribe", topic)
         .option("startingOffsets", starting)
+        .option("failOnDataLoss", "false")
         .load()
     )
 
@@ -258,4 +364,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

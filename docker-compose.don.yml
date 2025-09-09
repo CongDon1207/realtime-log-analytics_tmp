@@ -16,7 +16,7 @@ services:
     ports:
       - "8086:8086"         # test local, cố định port
     env_file:
-      - ./influxdb/.env.influx
+      - ./.env
     environment:
       - TZ=${TZ:-UTC}
     healthcheck:

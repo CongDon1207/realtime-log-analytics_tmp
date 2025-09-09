@@ -1,5 +1,10 @@
 FROM bitnami/spark:3.5.0
 
+# Cài libsnappy-dev để fix lỗi Snappy compression
+USER root
+RUN apt-get update && apt-get install -y libsnappy-dev && apt-get clean && rm -rf /var/lib/apt/lists/*
+USER 1001
+
 # Set HOME tuyệt đối cho Ivy để tránh lỗi
 ENV HOME=/tmp
 ENV IVY_HOME=$HOME/.ivy2
