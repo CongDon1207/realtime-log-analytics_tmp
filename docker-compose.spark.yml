@@ -10,11 +10,15 @@ services:
       - SPARK_MODE=master
       - SPARK_MASTER_URL=spark://spark-master:7077
       - HOME=/tmp
+      - PYSPARK_PYTHON=/opt/bitnami/python/bin/python3
+      - PYSPARK_DRIVER_PYTHON=/opt/bitnami/python/bin/python3
     ports:
       - "7077:7077"   # Spark master port
-      - "8081:8080"   # Spark UI
+      - "8084:8080"   # Spark UI (changed from 8081 to avoid conflict)
     networks:
       - spark-network
+      - appnet
+      - influx-net
     volumes:
       - ./spark/src:/opt/spark/app/src
       - ./spark/conf:/opt/spark/app/conf
@@ -29,10 +33,14 @@ services:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
       - HOME=/tmp
+      - PYSPARK_PYTHON=/opt/bitnami/python/bin/python3
+      - PYSPARK_DRIVER_PYTHON=/opt/bitnami/python/bin/python3
     depends_on:
       - spark-master
     networks:
       - spark-network
+      - appnet
+      - influx-net
     volumes:
       - ./spark/src:/opt/spark/app/src
       - ./spark/conf:/opt/spark/app/conf
@@ -41,3 +49,9 @@ services:
 networks:
   spark-network:
     driver: bridge
+  # Use external appnet to connect to Kafka
+  appnet:
+    external: true
+  influx-net:
+    external: true
+    name: realtime-log-analytics-don_influx-net

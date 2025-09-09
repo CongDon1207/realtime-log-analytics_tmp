@@ -1,3 +1,21 @@
+# H����>ng d���n Pipeline: Nginx �+' Flume �+' Kafka
+
+## T��ng quan
+Pipeline nA�y thu th��-p logs t��� cA�c web servers ### Kiểm tra logs Flume:
+```bash
+# Logs của collector
+docker logs flume-collector
+
+# Logs của agents
+docker logs flume-agent-web1
+docker logs flume-agent-web2  
+docker logs flume-agent-web3
+```
+
+### Kiểm tra Kafka topics:
+```bash
+# Liệt kê topics��ng Apache Flume �`��� stream d��_ li���u, vA� �`��a vA�o Apache Kafka �`��� l��u tr��_ vA� x��- lA�.
+
 # Hướng dẫn Pipeline: Nginx → Flume → Kafka
 
 ## Tổng quan
@@ -15,6 +33,8 @@ Kafka Topics (web-logs, web-errors)
 ```
 
 ## Các bước khởi chạy Pipeline
+
+## CA�c b����>c kh��Yi ch���y Pipeline
 
 ### 1. Khởi động Kafka
 ```bash
@@ -107,23 +127,37 @@ docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-console-consumer.sh 
 
 ### Kiểm tra Flume Collector đang lắng nghe:
 ```bash
-docker exec -it flume-collector sh -c "netstat -tuln | grep 41414"
+# Lệnh netstat không khả dụng trong container hiện tại
+# Thay vào đó kiểm tra logs để xác nhận
+docker logs flume-collector | grep -i "started\|listening\|bind"
 ```
 
-### Kiểm tra logs Flume:
+### Kiểm tra các Nginx container có thể tạo logs:
 ```bash
-# Logs của collector
+docker exec web1 sh -c "tail -5 /var/log/nginx/access.json.log"
+docker exec web2 sh -c "tail -5 /var/log/nginx/access.json.log"  
+docker exec web3 sh -c "tail -5 /var/log/nginx/access.json.log"
+
+# Kiểm tra error logs
+docker exec web1 sh -c "tail -5 /var/log/nginx/error.log"
+docker exec web2 sh -c "tail -5 /var/log/nginx/error.log"
+docker exec web3 sh -c "tail -5 /var/log/nginx/error.log"
+```
+
+### Ki���m tra logs Flume:
+```bash
+# Logs c��a collector
 docker logs flume-collector
 
-# Logs của agents
+# Logs c��a agents
 docker logs flume-agent-web1
 docker logs flume-agent-web2  
 docker logs flume-agent-web3
 ```
 
-### Kiểm tra Kafka topics:
+### Ki���m tra Kafka topics:
 ```bash
-# Liệt kê topics
+# Li���t kA� topics
 docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list"
 
 # Xem thông tin chi tiết topic
@@ -153,8 +187,45 @@ docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstra
 
 ## Kết luận
 Pipeline hoạt động thành công với luồng:
-- ✅ Nginx tạo access/error logs
-- ✅ Flume agents đọc logs từ files
-- ✅ Flume collector nhận data từ agents  
-- ✅ Data được gửi vào Kafka topics
-- ✅ Consumer có thể đọc real-time data từ Kafka
+- ✓ Nginx tạo access/error logs
+- ✓ Flume agents đọc logs từ files
+- ✓ Flume collector nhận data từ agents  
+- ✓ Data được gửi vào Kafka topics
+- ✓ Consumer có thể đọc real-time data từ Kafka
+
+---
+
+## Spark Structured Streaming (access → metrics/anomaly → InfluxDB)
+
+### Khởi chạy Spark cluster
+```bash
+make up-spark
+```
+
+### Chạy job Streaming (đọc Kafka → chuẩn hóa → cửa sổ 10s/2m → ghi InfluxDB)
+```bash
+# 1) Tạo file .env từ mẫu và điền INFLUX_TOKEN (nếu dùng auth)
+cp -n .env.sample .env || true
+
+# 2) Chạy job
+make run-stream-access
+```
+
+### Output và measurements InfluxDB
+- `http_stats` (tags: `env, hostname, method`; fields: `count, rps, avg_rt, max_rt, err_rate`; time = `window_end`).
+- `top_urls` (tags: `env, hostname, status, path`; field: `count`; time = `window_end`).
+- `anomaly` (tags: `env, hostname, kind`; fields: `ip, count, score`; time = `window_end`).
+
+Gợi ý truy vấn Top-N (lọc ở Grafana/Flux): sắp xếp `count` giảm dần, `limit N` theo mỗi `window_end`.
+
+### Kiểm tra nhanh
+- Kiểm tra logs Spark: `docker logs -f spark-master`
+- Kiểm tra Influx write: truy cập InfluxDB UI hoặc dùng Flux script `influxdb/verify.flux` (nếu có).
+
+### Ghi chú performance
+- Ảnh Spark đã được “prefetch” gói Kafka (`spark-sql-kafka-0-10`) trong lúc build để giảm thời gian `spark-submit` lần đầu.
+- `spark.jars.packages` được khai báo trong `spark/conf/spark-defaults.conf`, nên không cần truyền `--packages` khi chạy.
+
+### Ghi chú thiết kế
+- `err_rate` được tính trên tổng request mỗi (hostname, method) theo từng cửa sổ để tránh join phức tạp giữa các lớp status.
+- Top-N URL được tính sẵn theo (hostname, status, path); phần chọn Top-N thực hiện ở lớp hiển thị để tối giản xử lý stateful.
