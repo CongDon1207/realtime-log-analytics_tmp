@@ -14,6 +14,20 @@ Flume Collector (multiplexing selector)
 Kafka Topics (web-logs, web-errors)
 ```
 
+```
+Nginx Servers (web1, web2, web3) 
+   ↓ (Log files: access.json.log, error.log)
+Flume Agents (taildir source) 
+   ↓ (Avro sink → port 41414)
+Flume Collector (multiplexing selector)
+   ↓ (Kafka producer)
+Kafka Topics (web-logs, web-errors)
+   ↓ (Consumed by)
+Spark Structured Streaming (access → metrics / anomaly)
+   ↓ (Writes metrics)
+InfluxDB (bucket: logs — measurements: http_stats, top_urls, anomaly)
+```
+
 ## Các bước khởi chạy Pipeline
 ### 0. Tạo network trước
 ```bash
@@ -267,7 +281,7 @@ Pipeline sẽ tạo ra 3 measurements trong InfluxDB:
 
 
 
-#### Kiểm tra dữ liệu trong InfluxDB:
+#### Kiểm tra dữ liệu trong InfluxDB (sang terminal khác):
 ```bash
 # Truy cập InfluxDB UI
 echo "InfluxDB UI: http://localhost:8086 (Org: primary, Bucket: logs)"
