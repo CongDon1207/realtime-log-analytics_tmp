@@ -81,8 +81,10 @@ data/out/
 
 #file md
 PROMPT.md
+
 AGENTS.md
 .ai-prompt
 
 fixes/
+
 
