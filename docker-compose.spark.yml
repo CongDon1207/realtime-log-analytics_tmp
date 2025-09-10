@@ -19,7 +19,7 @@ services:
     networks:
       influx-net:
         aliases:
-          - spark-master-influx
+          - spark-master
       appnet:
       spark-network:
     volumes:
