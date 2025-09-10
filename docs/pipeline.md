@@ -311,6 +311,13 @@ source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(
 source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "top_urls") |> sort(columns: ["count"], desc: true) |> limit(n: 10)' --org $INFLUX_ORG --token $INFLUX_TOKEN
 ```
 
+#### Xóa dữ liệu logs sau khi sử dụng xong
+```bash
+   find data/logs -type f -not -name ".gitkeep" -delete
+   # hoặc sạch luôn (cẩn thận):
+   rm -rf data/logs/web{1,2,3}/*
+```
+
 ### Troubleshooting
 
 #### Lỗi kết nối Spark Worker:
