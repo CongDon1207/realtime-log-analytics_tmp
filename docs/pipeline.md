@@ -203,10 +203,15 @@ bash influxdb/init/onboarding.sh
    - Username: `admin`  
    - Password: `admin12345`
 
+![image alt](https://github.com/hungfnguyen/realtime-log-analytics/blob/feat/influxdb-storage/docs/img/influxdb_login.jpg?raw=true)
 3. **Tạo API Token mới**:
    - Sau khi đăng nhập, click vào **biểu tượng mũi tên ↗** (Load Data) ở sidebar trái
    - Chọn **API Tokens** từ menu
+    ![image alt](https://github.com/hungfnguyen/realtime-log-analytics/blob/feat/influxdb-storage/docs/img/guide_influxdb.png?raw=true)
+
    - **Xóa token cũ** (nếu có) bằng cách click vào token và chọn Delete
+    ![image alt](https://github.com/hungfnguyen/realtime-log-analytics/blob/feat/influxdb-storage/docs/img/delete_api_token.jpg?raw=true)
+    
    - Click **Generate API Token** → **All Access API Token**
    - Đặt tên cho token (ví dụ: `spark-streaming-token`)
    - **Copy token** vừa được tạo
@@ -214,12 +219,13 @@ bash influxdb/init/onboarding.sh
 4. **Cập nhật file cấu hình**:
    - Mở file `.env` ở thư mục root của project
    - Thay thế giá trị `INFLUX_TOKEN` bằng token vừa copy
-   
+
    ```bash
    # Ví dụ format trong file .env:
    INFLUX_TOKEN=DHxxYj3F83RYX4vZwj7Ftebb1jpKJnR0ylu96ZGH9BvvQT3hkmPs9V73r6c3uOKpS2fulZ76DlYnmFlL9rFLqQ==
    ```
-
+   ![image alt](https://github.com/hungfnguyen/realtime-log-analytics/blob/feat/influxdb-storage/docs/img/config_env.jpg?raw=true)
+    
 5. **Kiểm tra kết nối**: 
    ```bash
    source .env && curl -I -H "Authorization: Token $INFLUX_TOKEN" http://localhost:8086/ping
