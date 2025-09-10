@@ -11,13 +11,28 @@
 set -euo pipefail
 
 ############################################
-# 0) Định vị & nạp file .env.influx
+# 0) Định vị & nạp file .env (ưu tiên root .env, fallback .env.influx)
 ############################################
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${SCRIPT_DIR}/../.env.influx"
-[[ -f "$ENV_FILE" ]] || { echo "[err] Thiếu file env: $ENV_FILE"; exit 1; }
-# shellcheck disable=SC1091
-source "$ENV_FILE"
+ROOT_ENV="${SCRIPT_DIR}/../../.env"
+LOCAL_ENV="${SCRIPT_DIR}/../.env.influx"
+
+if [[ -f "$ROOT_ENV" ]]; then
+  echo "[info] Using root .env file: $ROOT_ENV"
+  # shellcheck disable=SC1091
+  source "$ROOT_ENV"
+  # Map root .env variables to expected names
+  ADMIN_TOKEN="${INFLUX_TOKEN:-}"
+  ORG_NAME="${INFLUX_ORG:-primary}"
+  BUCKET_NAME="${INFLUX_BUCKET:-logs}"
+elif [[ -f "$LOCAL_ENV" ]]; then
+  echo "[info] Using local .env.influx file: $LOCAL_ENV"
+  # shellcheck disable=SC1091
+  source "$LOCAL_ENV"
+else
+  echo "[err] Thiếu cả 2 file env: $ROOT_ENV hoặc $LOCAL_ENV"
+  exit 1
+fi
 
 ############################################
 # 1) Hàm tiện ích & làm sạch biến môi trường
@@ -32,9 +47,23 @@ die() { printf '%s\n' "$*" >&2; exit 1; }
 clean() { printf '%s' "$1" | tr -d '\r' | sed 's/[[:space:]]\+$//'; }
 
 # Làm sạch và gán mặc định nếu trống
-INFLUX_HOST="$(clean "${INFLUX_HOST:-localhost}")"
+# Kiểm tra xem có chạy từ trong container không
+if [[ -f "/.dockerenv" ]]; then
+  # Chạy từ trong container → dùng service name
+  INFLUX_HOST="$(clean "${INFLUX_HOST:-influxdb}")"
+else
+  # Chạy từ host machine → dùng localhost
+  INFLUX_HOST="$(clean "${INFLUX_HOST:-localhost}")"
+fi
 HOST_HTTP_PORT="$(clean "${HOST_HTTP_PORT:-8086}")"
-INFLUX_URL="$(clean "${INFLUX_URL:-http://${INFLUX_HOST}:${HOST_HTTP_PORT}}")"
+# Override INFLUX_URL nếu detect chạy từ host hoặc trong container
+if [[ -f "/.dockerenv" ]]; then
+  # Chạy từ trong container → có thể dùng INFLUX_URL từ .env
+  INFLUX_URL="$(clean "${INFLUX_URL:-http://${INFLUX_HOST}:${HOST_HTTP_PORT}}")"
+else
+  # Chạy từ host machine → force dùng localhost
+  INFLUX_URL="http://localhost:${HOST_HTTP_PORT}"
+fi
 
 ORG_NAME="$(clean "${ORG_NAME:-}")"
 BUCKET_NAME="$(clean "${BUCKET_NAME:-}")"

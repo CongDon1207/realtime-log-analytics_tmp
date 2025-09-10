@@ -8,17 +8,25 @@ services:
     hostname: spark-master
     environment:
       - SPARK_MODE=master
-      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_MASTER_URL=spark://spark-master-influx:7077
+      - SPARK_MASTER_HOST=spark-master-influx
       - HOME=/tmp
+      - PYSPARK_PYTHON=/opt/bitnami/python/bin/python3
+      - PYSPARK_DRIVER_PYTHON=/opt/bitnami/python/bin/python3
     ports:
       - "7077:7077"   # Spark master port
-      - "8081:8080"   # Spark UI
+      - "8084:8080"   # Spark UI (changed from 8081 to avoid conflict)
     networks:
-      - spark-network
+      influx-net:
+        aliases:
+          - spark-master
+      appnet:
+      spark-network:
     volumes:
       - ./spark/src:/opt/spark/app/src
       - ./spark/conf:/opt/spark/app/conf
-      - /tmp:/tmp  # fix Ivy
+      - ./spark/conf/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf:ro
+      - spark-tmp:/tmp  # tránh đầy tmpfs, dành riêng dung lượng
 
   spark-worker:
     build:
@@ -27,17 +35,31 @@ services:
     hostname: spark-worker
     environment:
       - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_MASTER_URL=spark://spark-master-influx:7077
       - HOME=/tmp
+      - PYSPARK_PYTHON=/opt/bitnami/python/bin/python3
+      - PYSPARK_DRIVER_PYTHON=/opt/bitnami/python/bin/python3
     depends_on:
       - spark-master
     networks:
+      - influx-net
+      - appnet
       - spark-network
     volumes:
       - ./spark/src:/opt/spark/app/src
       - ./spark/conf:/opt/spark/app/conf
-      - /tmp:/tmp
+      - ./spark/conf/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf:ro
+      - spark-tmp:/tmp
 
 networks:
   spark-network:
     driver: bridge
+  # Use external appnet to connect to Kafka
+  appnet:
+    external: true
+  influx-net:
+    external: true
+    name: realtime-log-analytics-don_influx-net
+
+volumes:
+  spark-tmp:
