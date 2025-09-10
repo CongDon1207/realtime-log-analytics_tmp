@@ -247,7 +247,7 @@ source .env && echo "INFLUX_TOKEN: ${INFLUX_TOKEN:0:20}..."
 ### Bước 3: Khởi chạy Spark cluster
 ```bash
 # Khởi động Spark cluster (master + worker)
-make up-spark
+docker-compose -f docker-compose.spark.yml up -d
 
 # Kiểm tra Spark cluster
 docker-compose -f docker-compose.spark.yml ps

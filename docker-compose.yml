@@ -1,0 +1,241 @@
+name: realtime-log-analytics
+
+networks:
+  appnet:
+    driver: bridge
+    name: realtime-analytics-net
+
+services:
+  # ===================================================================
+  # Nginx Web Servers (từ docker-compose.nginx.yml)
+  # ===================================================================
+  nginx-web1:
+    image: nginx:1.25
+    container_name: web1
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./nginx/web1.conf:/etc/nginx/nginx.conf:ro
+      - ./data/logs/web1:/var/log/nginx
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:8081 || exit 1" ]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+    networks:
+      - appnet
+
+  nginx-web2:
+    image: nginx:1.25
+    container_name: web2
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./nginx/web2.conf:/etc/nginx/nginx.conf:ro
+      - ./data/logs/web2:/var/log/nginx
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:8082 || exit 1" ]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+    networks:
+      - appnet
+
+  nginx-web3:
+    image: nginx:1.25
+    container_name: web3
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./nginx/web3.conf:/etc/nginx/nginx.conf:ro
+      - ./data/logs/web3:/var/log/nginx
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:8083 || exit 1" ]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+    networks:
+      - appnet
+
+  # ===================================================================
+  # Flume Services (từ docker-compose.flume.yml)
+  # ===================================================================
+  flume-collector:
+    build: ./flume
+    container_name: flume-collector
+    volumes:
+      - ./flume/collector/collector.conf:/opt/flume/conf/flume.conf
+      - ./data/flume/agents/collector/checkpoint:/opt/flume/checkpoint
+      - ./data/flume/agents/collector/data:/opt/flume/data
+      - ./data/out/access:/flume-out/access
+      - ./data/out/error:/flume-out/error
+    command: /opt/flume/bin/flume-ng agent --conf /opt/flume/conf --conf-file /opt/flume/conf/flume.conf --name a1 -Dflume.root.logger=INFO,console
+    ports:
+      - "41414:41414"
+    depends_on:
+      - kafka
+    networks:
+      - appnet
+
+  flume-agent-web1:
+    build: ./flume
+    container_name: flume-agent-web1
+    volumes:
+      - ./flume/agents/agent-web1.conf:/opt/flume/conf/flume.conf
+      - ./data/logs/web1:/var/log/nginx:ro
+      - ./data/flume/agents/web1/checkpoint:/opt/flume/checkpoint
+      - ./data/flume/agents/web1/data:/opt/flume/data
+    command: /opt/flume/bin/flume-ng agent --conf /opt/flume/conf --conf-file /opt/flume/conf/flume.conf --name a1 -Dflume.root.logger=INFO,console
+    depends_on:
+      - nginx-web1
+      - flume-collector
+    networks:
+      - appnet
+
+  flume-agent-web2:
+    build: ./flume
+    container_name: flume-agent-web2
+    volumes:
+      - ./flume/agents/agent-web2.conf:/opt/flume/conf/flume.conf
+      - ./data/logs/web2:/var/log/nginx:ro
+      - ./data/flume/agents/web2/checkpoint:/opt/flume/checkpoint
+      - ./data/flume/agents/web2/data:/opt/flume/data
+    command: /opt/flume/bin/flume-ng agent --conf /opt/flume/conf --conf-file /opt/flume/conf/flume.conf --name a1 -Dflume.root.logger=INFO,console
+    depends_on:
+      - nginx-web2
+      - flume-collector
+    networks:
+      - appnet
+
+  flume-agent-web3:
+    build: ./flume
+    container_name: flume-agent-web3
+    volumes:
+      - ./flume/agents/agent-web3.conf:/opt/flume/conf/flume.conf
+      - ./data/logs/web3:/var/log/nginx:ro
+      - ./data/flume/agents/web3/checkpoint:/opt/flume/checkpoint
+      - ./data/flume/agents/web3/data:/opt/flume/data
+    command: /opt/flume/bin/flume-ng agent --conf /opt/flume/conf --conf-file /opt/flume/conf/flume.conf --name a1 -Dflume.root.logger=INFO,console
+    depends_on:
+      - nginx-web3
+      - flume-collector
+    networks:
+      - appnet
+  # ===================================================================
+  # Kafka Service (từ docker-compose.hao.yml)
+  # ===================================================================
+  kafka:
+    build:
+      context: ./kafka
+      dockerfile: DockerFile
+    image: bitnami/kafka:3.5.1
+    container_name: kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_ENABLE_KRAFT: "yes"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_CFG_NUM_PARTITIONS: "3"
+      KAFKA_CFG_LOG_DIRS: "/bitnami/kafka/data"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_BROKER_WAIT_RETRIES: 60
+      KAFKA_BROKER_WAIT_SLEEP: 5
+    networks:
+      - appnet
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "kafka", "9092" ]
+      interval: 15s
+      retries: 20
+      timeout: 10s
+
+  # ===================================================================
+  # InfluxDB Service (từ docker-compose.don.yml)
+  # ===================================================================
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    env_file:
+      - ./.env
+    environment:
+      - TZ=${TZ:-UTC}
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:8086/health" ]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - influx-data:/var/lib/influxdb2
+      - influx-config:/etc/influxdb2
+      - ./influxdb/init:/init:ro
+      - ./influxdb:/scripts:ro
+    networks:
+      - appnet
+
+  
+
+  # ===================================================================
+  # Spark Services (từ docker-compose.spark.yml)
+  # ===================================================================
+  spark-master:
+    build:
+      context: ./spark
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_MASTER_HOST=spark-master
+      - HOME=/tmp
+      - PYSPARK_PYTHON=/opt/bitnami/python/bin/python3
+      - PYSPARK_DRIVER_PYTHON=/opt/bitnami/python/bin/python3
+    ports:
+      - "7077:7077"
+      - "8084:8080"
+    volumes:
+      - ./spark/src:/opt/spark/app/src
+      - ./spark/conf:/opt/spark/app/conf
+      - ./spark/conf/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf:ro
+      - spark-tmp:/tmp
+    networks:
+      - appnet
+
+  spark-worker:
+    build:
+      context: ./spark
+    container_name: spark-worker
+    hostname: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - HOME=/tmp
+      - PYSPARK_PYTHON=/opt/bitnami/python/bin/python3
+      - PYSPARK_DRIVER_PYTHON=/opt/bitnami/python/bin/python3
+    depends_on:
+      - spark-master
+    volumes:
+      - ./spark/src:/opt/spark/app/src
+      - ./spark/conf:/opt/spark/app/conf
+      - ./spark/conf/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf:ro
+      - spark-tmp:/tmp
+    networks:
+      - appnet
+
+volumes:
+  influx-data:
+  influx-config: 
+  kafka_data: 
+  spark-tmp:
