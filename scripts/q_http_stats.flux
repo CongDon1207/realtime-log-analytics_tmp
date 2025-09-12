@@ -1,0 +1,5 @@
+from(bucket: "logs")
+  |> range(start: -30m)
+  |> filter(fn: (r) => r._measurement == "http_stats")
+  |> sort(columns: ["_time"], desc: true)
+  |> limit(n: 5)

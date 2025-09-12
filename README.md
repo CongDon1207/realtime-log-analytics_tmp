@@ -10,7 +10,7 @@ Giải pháp **giám sát & phân tích log real-time** cho web servers:
 
 ## ✨ Tính năng chính
 
-* Đếm **HTTP status** (2xx/3xx/4xx/5xx), **RPS**
+* Đếm **HTTP status** (2xx/3xx/4xx/5xx), **RPS**, **latency**, **byte**
 * Phát hiện **bất thường**: *IP spike*, *error surge*, *scan nhiều URL*
 * **Dashboard** real-time và **Alerting** theo ngưỡng
 * Thiết kế **mở rộng ngang**, **độ trễ thấp**, **chịu lỗi**
@@ -19,8 +19,16 @@ Giải pháp **giám sát & phân tích log real-time** cho web servers:
 ## 🏗️ Kiến trúc
 
 <div align="center">
-  <img src="docs/architecture.jpeg" alt="System Architecture" width="820"><br/>
+  <img src="docs/img/architecture.jpeg" alt="System Architecture" width="820"><br/>
   <em>Hình 1. Kiến trúc tổng thể</em>
+</div>
+
+---
+## 📊 Luồng dữ liệu log
+
+<div align="center">
+  <img src="docs/log-pipeline.jpg" alt="Log Data Pipeline" width="1000"><br/>
+  <em>Hình 2. Luồng dữ liệu từ Nginx log đến Grafana</em>
 </div>
 
 ---
@@ -144,8 +152,11 @@ realtime-log-analytics/
 
 * **Quy ước đặt tên nhánh `feature`:**
     * `feat/flume-ingestion`: **Hùng** (Flume)
-    * `feat/kafka-pipeline`: **Đôn** (Kafka)
-    * `feat/spark-analytics`: **Hảo** (Spark)
-    * `feat/influxdb-storage`: **Hải** (InfluxDB)
+    * `feat/kafka-pipeline`: **Hảo** (Kafka)
+    * `feat/spark-analytics`: **Hải** (Spark)
+    * `feat/influxdb-storage`: **Đôn** (InfluxDB)
     * `feat/grafana-dashboard`: **Nhật** (Grafana)
+## 📚 Tài liệu chi tiết
+
+- 📄 **Project Doc (Google Docs)**: [Tài liệu Kiến trúc – Hệ thống Giám sát & Phân tích Log Server Tập trung](https://docs.google.com/document/d/1PiGJ2ZUnI4yse3WgkTP1DghxmsFws_z2dIaZyuNYdq8/edit?hl=vi&tab=t.0#heading=h.exjyajopfano)
 
