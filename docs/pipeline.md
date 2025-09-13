@@ -396,3 +396,74 @@ http_stats | env=it-check | hostname=web1 | method=GET | avg_rt=0.133 | count=3 
 Table: keys: [_start, _stop, _field, _measurement, env, hostname, kind]  
 anomaly | env=it-check | hostname=web1 | kind=ip_spike | ip=2.2.2.2 | count=3 | score=1.0
 ```
+## Spark Structured Streaming (error-log → error_events → InfluxDB)
+
+Pipeline này thu thập **error logs** từ các service/web server, xử lý realtime bằng **Spark Structured Streaming**, và lưu kết quả vào **InfluxDB** để phân tích.
+
+---
+### Chạy Spark Streaming job cho Error Log
+<!-- Lệnh ngắn gọn (tự nạp .env, chạy 70–75s rồi dừng) -->
+bash scripts/run_error_stream.sh
+
+<!-- Hoặc ép timeout: -->
+set -a; . .env; set +a; docker exec -e INFLUX_URL -e INFLUX_TOKEN -e INFLUX_ORG -e INFLUX_BUCKET -e ENV_TAG -e WINDOW_DURATION -e WATERMARK -e CHECKPOINT_DIR_ERROR spark-master bash -lc 'timeout 75s /opt/bitnami/spark/bin/spark-submit --master spark://spark-master:7077 /opt/spark/app/src/python/stream_error.py'
+
+### Output và measurements InfluxDB Pipeline sẽ tạo ra 1 measurement chính:
+#### 1. error_events - Thống kê lỗi theo cửa sổ thời gian
+- **Tags**: env, hostname, level, message_class
+- **Fields**: count (số lượng lỗi trong window)
+- **Time**: window_end (kết thúc cửa sổ, ví dụ 10 giây)
+
+#### Kiểm tra dữ liệu trong InfluxDB (mở terminal khác):
+<!-- Truy cập InfluxDB UI -->
+echo "InfluxDB UI: http://localhost:8086 (Org: primary, Bucket: logs)"
+
+<!-- Query toàn bộ error_events -->
+source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: 0) |> filter(fn: (r) => r._measurement == "error_events") |> limit(n: 10)' --org $INFLUX_ORG --token $INFLUX_TOKEN
+
+<!-- Pivot để dễ nhìn -->
+source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: 0) |> filter(fn: (r) => r._measurement == "error_events") |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")' --org $INFLUX_ORG --token $INFLUX_TOKEN
+
+<!-- Count tổng số records -->
+source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: 0) |> filter(fn: (r) => r._measurement == "error_events") |> count()' --org $INFLUX_ORG --token $INFLUX_TOKEN
+
+#### Xóa dữ liệu logs sau khi sử dụng xong
+   find data/logs -type f -not -name ".gitkeep" -delete
+   <!-- hoặc sạch luôn (cẩn thận): -->
+   rm -rf data/logs/web{1,2,3}/*
+
+### Không có dữ liệu trong InfluxDB:
+<!-- Kiểm tra Kafka có messages -->
+docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic web-errors --from-beginning --max-messages 10"
+
+<!-- Test manual write vào InfluxDB -->
+source .env && echo "error_events,hostname=test_host,level=ERROR,message_class=test field1=1i $(date +%s)000000000" | docker exec -i influxdb influx write --bucket $INFLUX_BUCKET --org $INFLUX_ORG --token $INFLUX_TOKEN
+<!-- Kiểm tra -->
+source .env && docker exec influxdb influx query 'from(bucket:"logs") |> range(start:-10m) |> filter(fn:(r)=> r._measurement=="error_events") |> sort(columns:["_time"], desc:true) |> limit(n:10)' --org $INFLUX_ORG --token $INFLUX_TOKEN
+
+### Ghi chú performance
+- **Package pre-configured**: spark.jars.packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
+- **Native libraries**: libsnappy-dev đã cài sẵn
+- **InfluxDB client**: influxdb-client==1.35.0 được install sẵn
+- Checkpoint lưu tại `/tmp/checkpoints_error`
+
+### Ghi chú thiết kế
+- **Window & Watermark**: 10 giây window, watermark 2 phút
+- **Metrics calculation**: count tính tổng lỗi theo (hostname, level, message_class) mỗi window
+- **Data format**: InfluxDB line protocol với proper tag/field separation và nanosecond timestamps
+- **Scalability**: GroupBy trên (hostname, level, message_class) để giảm lượng data gửi InfluxDB
+
+### Performance metrics từ test
+- **Processing latency**: ~2-3 giây cho mỗi micro-batch 10s window
+- **Throughput**: ~5 events/second với 1–2 streaming query
+- **Memory usage**: Spark driver ~434MB, worker tùy workload
+- **InfluxDB write**: Batch size 500 records, flush interval 1s
+
+### Example output khi pipeline hoạt động
+<!-- Từ Spark logs -->
+SUCCESS: Wrote 7 lines to InfluxDB measurement 'error_events'
+SUCCESS: Wrote 5 lines to InfluxDB measurement 'error_events'
+
+<!-- Từ InfluxDB query -->
+Table: keys: [_start, _stop, _field, _measurement, env, hostname, level, message_class]
+error_events | env=it-check | hostname=web1 | level=ERROR | message_class=db | count=3
