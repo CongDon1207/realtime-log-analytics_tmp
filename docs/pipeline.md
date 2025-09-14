@@ -43,20 +43,14 @@ docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstra
 docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic web-logs"
 ```
 
-
-### 3. Generate Diverse Traffic (Khuyến nghị)
-```bash
-# Sử dụng script tự động tạo traffic đa dạng với response time thực
-chmod +x generate_traffic.sh && ./generate_traffic.sh
-```
-
-### 4. Generate Access Logs (Thủ công)
+### Lưu ý: chỗ này không cần làm cũng được, do error log đã tự tạo rồi
+### 3. Generate Access Logs (Thủ công) 
 ```bash
 # Tạo 10 requests loi đến /api endpoint  
 for i in {1..10}; do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/api; done
 ```
 
-### 5. Generate Error Logs (Thủ công)
+### 4. Generate Error Logs (Thủ công)
 ```bash
 # Tạo 5 requests lỗi đến /oops endpoint
 for i in {1..5}; do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/oops; done
@@ -288,9 +282,20 @@ source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(
 
 #### Xóa dữ liệu logs sau khi sử dụng xong
 ```bash
+   # Xóa log files trên disk
    find data/logs -type f -not -name ".gitkeep" -delete
    # hoặc sạch luôn (cẩn thận):
    rm -rf data/logs/web{1,2,3}/*
+
+   # Xóa dữ liệu trong Kafka topics (Git Bash trên Windows)
+   # Cách 1 (khuyên dùng): dùng helper script trong repo — script sẽ chờ broker rồi recreate topics sạch
+   bash kafka/create-topic.sh
+
+   # Cách 2: Xóa từng topic rồi tạo lại (non-interactive, phù hợp với Git Bash)
+   docker compose exec -T kafka bash -lc "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --delete --topic web-logs"
+   docker compose exec -T kafka bash -lc "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --delete --topic web-errors"
+   docker compose exec -T kafka bash -lc "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --replication-factor 1 --partitions 1 --topic web-logs"
+   docker compose exec -T kafka bash -lc "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --replication-factor 1 --partitions 1 --topic web-errors"
 ```
 
 ### Troubleshooting
