@@ -19,7 +19,7 @@ Giải pháp **giám sát & phân tích log real-time** cho web servers:
 ## 🏗️ Kiến trúc
 
 <div align="center">
-  <img src="docs/architecture.jpeg" alt="System Architecture" width="820"><br/>
+  <img src="docs/img/architecture.jpeg" alt="System Architecture" width="820"><br/>
   <em>Hình 1. Kiến trúc tổng thể</em>
 </div>
 

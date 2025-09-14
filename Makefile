@@ -31,4 +31,19 @@ ps:
 logs-don:
 	docker compose -f $(COMPOSE_DON) logs -f
 
+# ============================
+# Spark helpers
+# ============================
+
+.PHONY: up-spark down-spark run-stream-access
+
+up-spark:
+	docker compose -f docker-compose.spark.yml up -d --build
+
+down-spark:
+	docker compose -f docker-compose.spark.yml down
+
+run-stream-access:
+	bash scripts/run_access_stream.sh
+
 
