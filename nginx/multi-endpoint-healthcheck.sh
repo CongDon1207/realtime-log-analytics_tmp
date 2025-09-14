@@ -12,7 +12,7 @@ ENDPOINTS=("/" "/api" "/random" "/status" "/health" "/notfound" "/forbidden" "/r
 echo "=== Multi-endpoint healthcheck bắt đầu cho port $PORT ==="
 
 SUCCESS_COUNT=0
-TOTAL_CALLS=4  # Tăng từ 3 lên 4 để test nhiều hơn
+TOTAL_CALLS=3  
 
 # Gọi 4 endpoints random
 for ((i=1; i<=TOTAL_CALLS; i++)); do

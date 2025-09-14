@@ -20,10 +20,10 @@ services:
       - ./data/logs/web1:/var/log/nginx
     healthcheck:
       test: ["CMD-SHELL", "bash /healthcheck.sh 8081"]
-      interval: 5s
-      timeout: 8s
-      retries: 5
-      start_period: 5s
+      interval: 12s
+      timeout: 4s
+      retries: 2
+      start_period: 10s
     networks:
       - appnet
 
@@ -38,10 +38,10 @@ services:
       - ./data/logs/web2:/var/log/nginx
     healthcheck:
       test: ["CMD-SHELL", "bash /healthcheck.sh 8082"]
-      interval: 7s
-      timeout: 8s
-      retries: 5
-      start_period: 5s
+      interval: 12s
+      timeout: 4s
+      retries: 2
+      start_period: 10s
     networks:
       - appnet
 
@@ -56,10 +56,10 @@ services:
       - ./data/logs/web3:/var/log/nginx
     healthcheck:
       test: ["CMD-SHELL", "bash /healthcheck.sh 8083"]
-      interval: 6s
-      timeout: 8s
-      retries: 5
-      start_period: 5s
+      interval: 12s
+      timeout: 4s
+      retries: 2
+      start_period: 10s
     networks:
       - appnet
 
