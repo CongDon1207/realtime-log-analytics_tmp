@@ -16,13 +16,14 @@ services:
       - "8081:8081"
     volumes:
       - ./nginx/web1.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/multi-endpoint-healthcheck.sh:/healthcheck.sh:ro
       - ./data/logs/web1:/var/log/nginx
     healthcheck:
-      test: [ "CMD-SHELL", "curl -sf http://localhost:8081 || exit 1" ]
-      interval: 10s
-      timeout: 2s
-      retries: 5
-      start_period: 5s
+      test: ["CMD-SHELL", "bash /healthcheck.sh 8081"]
+      interval: 12s
+      timeout: 4s
+      retries: 2
+      start_period: 10s
     networks:
       - appnet
 
@@ -33,13 +34,14 @@ services:
       - "8082:8082"
     volumes:
       - ./nginx/web2.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/multi-endpoint-healthcheck.sh:/healthcheck.sh:ro
       - ./data/logs/web2:/var/log/nginx
     healthcheck:
-      test: [ "CMD-SHELL", "curl -sf http://localhost:8082 || exit 1" ]
-      interval: 10s
-      timeout: 2s
-      retries: 5
-      start_period: 5s
+      test: ["CMD-SHELL", "bash /healthcheck.sh 8082"]
+      interval: 12s
+      timeout: 4s
+      retries: 2
+      start_period: 10s
     networks:
       - appnet
 
@@ -50,13 +52,14 @@ services:
       - "8083:8083"
     volumes:
       - ./nginx/web3.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/multi-endpoint-healthcheck.sh:/healthcheck.sh:ro
       - ./data/logs/web3:/var/log/nginx
     healthcheck:
-      test: [ "CMD-SHELL", "curl -sf http://localhost:8083 || exit 1" ]
-      interval: 10s
-      timeout: 2s
-      retries: 5
-      start_period: 5s
+      test: ["CMD-SHELL", "bash /healthcheck.sh 8083"]
+      interval: 12s
+      timeout: 4s
+      retries: 2
+      start_period: 10s
     networks:
       - appnet
 
