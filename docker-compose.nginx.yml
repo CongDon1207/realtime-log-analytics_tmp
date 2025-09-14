@@ -7,7 +7,7 @@ services:
       - ./nginx/web1.conf:/etc/nginx/nginx.conf:ro
       - ./data/logs/web1:/var/log/nginx
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8081 || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/slow || exit 1"]
       interval: 10s
       timeout: 2s
       retries: 5

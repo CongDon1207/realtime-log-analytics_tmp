@@ -44,13 +44,19 @@ docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstra
 ```
 
 
-### 3. Generate Access Logs
+### 3. Generate Diverse Traffic (Khuyến nghị)
 ```bash
-# Tạo 10 requests loi đến /api endpoint
+# Sử dụng script tự động tạo traffic đa dạng với response time thực
+chmod +x generate_traffic.sh && ./generate_traffic.sh
+```
+
+### 4. Generate Access Logs (Thủ công)
+```bash
+# Tạo 10 requests loi đến /api endpoint  
 for i in {1..10}; do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/api; done
 ```
 
-### 4. Generate Error Logs  
+### 5. Generate Error Logs (Thủ công)
 ```bash
 # Tạo 5 requests lỗi đến /oops endpoint
 for i in {1..5}; do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/oops; done
@@ -227,10 +233,27 @@ source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(
 #### Query HTTP Performance Metrics (`http_stats`):
 ```bash
 # Xem metrics hiệu năng HTTP với pivot để dễ đọc
-source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "http_stats") |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")' --org $INFLUX_ORG --token $INFLUX_TOKEN
+source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "http_stats") |> pivot(rowKey:["_time","hostname","method"], columnKey: ["_field"], valueColumn: "_value")' --org $INFLUX_ORG --token $INFLUX_TOKEN
 
 # Chỉ xem response time metrics
-source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "http_stats" and (r._field == "avg_rt" or r._field == "max_rt")) |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")' --org $INFLUX_ORG --token $INFLUX_TOKEN
+source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "http_stats" and (r._field == "avg_rt" or r._field == "max_rt")) |> pivot(rowKey:["_time","hostname","method"], columnKey: ["_field"], valueColumn: "_value")' --org $INFLUX_ORG --token $INFLUX_TOKEN
+```
+
+#### Check phân phối latency (rt) – chẩn đoán nhanh
+```bash
+source .env && docker exec influxdb influx query '
+  a = from(bucket: "logs")
+    |> range(start: -30m)
+    |> filter(fn: (r) => r._measurement == "http_stats" and r._field == "avg_rt")
+    |> quantile(q: 0.95, method: "exact_selector")
+
+  b = from(bucket: "logs")
+    |> range(start: -30m)
+    |> filter(fn: (r) => r._measurement == "http_stats" and r._field == "max_rt")
+    |> quantile(q: 0.95, method: "exact_selector")
+
+  union(tables: {avg_rt_p95: a, max_rt_p95: b})
+' --org $INFLUX_ORG --token $INFLUX_TOKEN
 ```
 
 #### Query Top URLs (`top_urls`):
@@ -254,10 +277,10 @@ source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(
 #### Query Error Events (`error_events`):
 ```bash
 # Tất cả lỗi hệ thống với pivot
-source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "error_events") |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")' --org $INFLUX_ORG --token $INFLUX_TOKEN
+source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "error_events") |> pivot(rowKey:["_time","hostname","level"], columnKey: ["_field"], valueColumn: "_value")' --org $INFLUX_ORG --token $INFLUX_TOKEN
 
-# Chỉ lỗi CRITICAL và ERROR level
-source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "error_events" and (r.level == "ERROR" or r.level == "CRIT")) |> sort(columns: ["_time"], desc: true)' --org $INFLUX_ORG --token $INFLUX_TOKEN
+# Chỉ lỗi CRITICAL và ERROR level  
+source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "error_events" and r.level == "error") |> sort(columns: ["_time"], desc: true)' --org $INFLUX_ORG --token $INFLUX_TOKEN
 
 # Thống kê lỗi theo hostname và level
 source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "error_events") |> group(columns: ["hostname", "level"]) |> sum()' --org $INFLUX_ORG --token $INFLUX_TOKEN
