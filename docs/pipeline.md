@@ -76,7 +76,7 @@ docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-console-consumer.sh 
   "time": "2025-09-09T02:43:12+00:00",
   "ts": 1757385792.958,
   "remote": "172.22.0.1", 
-  "hostname": "5062a08432a6",
+  "hostname": "web1",
   "method": "GET",
   "path": "/api",
   "status": 502,
@@ -206,6 +206,7 @@ Pipeline sẽ tạo ra 4 measurements chính trong InfluxDB để phân tích lo
 - **Mục đích**: Theo dõi và phân loại các lỗi hệ thống
 - **Tags**: `env`, `hostname`, `level` (ERROR/WARN/CRIT), `message_class` (db/api/network/etc.)
 - **Fields**: `count` (số lượng lỗi trong window)
+- **Ghi chú**: `hostname` luôn là `web1`/`web2`/`web3`; nếu log gốc thiếu giá trị sẽ được thay bằng `unknown_host`
 - **Time**: `window_end`
 
 ### Kiểm tra dữ liệu trong InfluxDB
@@ -253,10 +254,10 @@ source .env && docker exec influxdb influx query '
 #### Query Top URLs (`top_urls`):
 ```bash
 # Top URLs được truy cập nhiều nhất
-source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "top_urls") |> sort(columns: ["_value"], desc: true) |> limit(n: 10)' --org $INFLUX_ORG --token $INFLUX_TOKEN
+source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "top_urls" and r._field == "count") |> group(columns: ["hostname", "path", "status"]) |> sum(column: "_value") |> sort(columns: ["_value"], desc: true) |> limit(n:10)' --org $INFLUX_ORG --token $INFLUX_TOKEN
 
 # URLs có status code lỗi (4xx, 5xx)
-source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "top_urls" and (r.status =~ /^[45]/)) |> sort(columns: ["_value"], desc: true)' --org $INFLUX_ORG --token $INFLUX_TOKEN
+source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "top_urls" and r._field == "count" and (r.status =~ /^[45]/)) |> group(columns: ["hostname", "path", "status"]) |> sum(column: "_value") |> sort(columns: ["_value"], desc: true) |> limit(n:10)' --org $INFLUX_ORG --token $INFLUX_TOKEN
 ```
 
 #### Query Anomaly Detection (`anomaly`):
