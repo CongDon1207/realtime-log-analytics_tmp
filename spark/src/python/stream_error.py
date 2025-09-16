@@ -71,7 +71,10 @@ def _write_influx(df, batch_id: int, measurement: str, tags: List[str], fields: 
             val = r[t]
             if val is None:
                 continue
-            tag_part.append(f"{t}={_escape_tag(str(val))}")
+            sval = str(val).strip()
+            if not sval:
+                continue
+            tag_part.append(f"{t}={_escape_tag(sval)}")
 
         field_part = []
         for f in fields:
