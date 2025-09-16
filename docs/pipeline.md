@@ -43,20 +43,7 @@ docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstra
 docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic web-logs"
 ```
 
-### Lưu ý: chỗ này không cần làm cũng được, do error log đã tự tạo rồi
-### 3. Generate Access Logs (Thủ công) 
-```bash
-# Tạo 10 requests loi đến /api endpoint  
-for i in {1..10}; do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/api; done
-```
-
-### 4. Generate Error Logs (Thủ công)
-```bash
-# Tạo 5 requests lỗi đến /oops endpoint
-for i in {1..5}; do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/oops; done
-```
-
-### 5. Kiểm tra Consumer
+### 3. Kiểm tra Consumer
 
 #### Consumer cho Access Logs (web-logs topic):
 ```bash
