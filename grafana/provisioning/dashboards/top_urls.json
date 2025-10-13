@@ -1,0 +1,359 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Logs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "yellow",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 17,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": false
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Logs"
+          },
+          "query": "from(bucket: \"logs\") |> range(start: -2h) |> filter(fn: (r) => r._measurement == \"top_urls\" and r._field == \"count\") |> group(columns: [\"status\"]) |> sum() |> keep(columns: [\"_value\", \"status\", \"_time\"]) |> yield(name: \"result\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Tỷ lệ HTTP Status Codes (2h qua)",
+      "transparent": true,
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Logs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 7,
+        "x": 17,
+        "y": 0
+      },
+      "id": 5,
+      "options": {
+        "displayMode": "basic",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Logs"
+          },
+          "query": "from(bucket: \"logs\") |> range(start: -2h) |> filter(fn: (r) => r._measurement == \"top_urls\" and r._field == \"count\") |> filter(fn: (r) => r.status =~ /^4.*/ or r.status =~ /^5.*/) |> group(columns: [\"hostname\"]) |> sum() |> sort(columns: [\"_value\"], desc: true) |> limit(n: 5) |> keep(columns: [\"_value\", \"hostname\", \"_time\"]) |> yield(name: \"result\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Tỷ lệ Phân phối Lỗi (4xx/5xx) theo Hostname (2h qua)",
+      "transparent": true,
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Logs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 4,
+      "options": {
+        "displayMode": "basic",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "vertical",
+        "reduceOptions": {
+          "calcs": [],
+          "fields": "",
+          "values": true
+        },
+        "showUnfilled": true,
+        "text": {},
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Logs"
+          },
+          "query": "from(bucket: \"logs\") |> range(start: -2h) |> filter(fn: (r) => r._measurement == \"top_urls\" and r._field == \"count\") |> filter(fn: (r) => r.status =~ /^4.*/ or r.status =~ /^5.*/ ) |> group(columns: [\"status\", \"path\", \"hostname\"]) |> sum() |> map(fn: (r) => ({ r with label: r.status + \" | \" + r.hostname + \" | \" + r.path })) |> sort(columns: [\"_value\"], desc: true) |> limit(n: 10) |> keep(columns: [\"_value\", \"label\", \"_time\"]) |> yield(name: \"result\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 lỗi nhiều nhất theo Status Code (2h qua)",
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "_value"
+              }
+            ]
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Logs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 18,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "id": 1,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "never",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Logs"
+          },
+          "query": "from(bucket: \"logs\") |> range(start: -2h) |> filter(fn: (r) => r._measurement == \"top_urls\" and r._field == \"count\") |> group(columns: [\"hostname\", \"path\"]) |> sum() |> map(fn: (r) => ({ r with label: r.hostname + \" | \" + r.path })) |> sort(columns: [\"_value\"], desc: true) |> limit(n: 10) |> keep(columns: [\"_value\", \"label\", \"_time\"]) |> yield(name: \"result\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 URL được truy cập nhiều nhất (2h qua)",
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "_value"
+              }
+            ]
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "barchart"
+    }
+  ],
+  "refresh": false,
+  "schemaVersion": 38,
+  "tags": [
+    "influxdb",
+    "http",
+    "urls"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "2025-10-11T08:18:39.842Z",
+    "to": "2025-10-13T08:18:39.842Z"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Top URLs Dashboard",
+  "uid": "bab2e9fc-96a6-4f4e-b89b-4ec358d752fe",
+  "version": 30,
+  "weekStart": ""
+}

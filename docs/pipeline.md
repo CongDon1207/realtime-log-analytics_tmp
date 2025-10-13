@@ -43,20 +43,7 @@ docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstra
 docker exec -it kafka bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic web-logs"
 ```
 
-### Lưu ý: chỗ này không cần làm cũng được, do error log đã tự tạo rồi
-### 3. Generate Access Logs (Thủ công) 
-```bash
-# Tạo 10 requests loi đến /api endpoint  
-for i in {1..10}; do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/api; done
-```
-
-### 4. Generate Error Logs (Thủ công)
-```bash
-# Tạo 5 requests lỗi đến /oops endpoint
-for i in {1..5}; do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/oops; done
-```
-
-### 5. Kiểm tra Consumer
+### 3. Kiểm tra Consumer
 
 #### Consumer cho Access Logs (web-logs topic):
 ```bash
@@ -281,67 +268,192 @@ source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(
 source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> filter(fn: (r) => r._measurement == "error_events") |> group(columns: ["hostname", "level"]) |> sum()' --org $INFLUX_ORG --token $INFLUX_TOKEN
 ```
 
-#### Xóa dữ liệu logs sau khi sử dụng xong
+#### Xóa dữ liệu logs và reset pipeline
+
+⚠️ **Hiểu đúng luồng dữ liệu:**
+- **Nginx** ghi log → `data/logs/web{1,2,3}/` (access.json.log, error.log)
+- **Flume** ĐỌC từ `data/logs/web{1,2,3}/` → GHI vào **Kafka topics**
+- **Spark** đọc từ Kafka → GHI vào **InfluxDB**
+
+**Bước 1: Xóa log files và reset Nginx**
 ```bash
-   # Xóa log files trên disk
-   find data/logs -type f -not -name ".gitkeep" -delete
-   # hoặc sạch luôn (cẩn thận):
-   rm -rf data/logs/web{1,2,3}/*
+# Xóa log files
+find data/logs/web{1,2,3} -type f -name "*.log" -delete
 
-   # Xóa dữ liệu trong Kafka topics (Git Bash trên Windows)
-   # Cách 1 (khuyên dùng): dùng helper script trong repo — script sẽ chờ broker rồi recreate topics sạch
-   bash kafka/create-topic.sh
+# QUAN TRỌNG: Restart Nginx để tạo file log mới
+docker restart web1 web2 web3
 
-   # Cách 2: Xóa từng topic rồi tạo lại (non-interactive, phù hợp với Git Bash)
-   docker compose exec -T kafka bash -lc "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --delete --topic web-logs"
-   docker compose exec -T kafka bash -lc "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --delete --topic web-errors"
-   docker compose exec -T kafka bash -lc "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --replication-factor 1 --partitions 1 --topic web-logs"
-   docker compose exec -T kafka bash -lc "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --replication-factor 1 --partitions 1 --topic web-errors"
+```
+
+**Bước 2: Xóa Flume position files và restart**
+```bash
+# Xóa position files (để Flume nhận diện file log mới)
+rm -f data/flume/agents/web1/data/taildir_position.json
+rm -f data/flume/agents/web2/data/taildir_position.json
+rm -f data/flume/agents/web3/data/taildir_position.json
+
+# Restart Flume agents
+docker restart flume-agent-web1 flume-agent-web2 flume-agent-web3
+```
+
+**Bước 3: Xóa Kafka topics (optional)**
+```bash
+# Recreate topics sạch
+bash kafka/create-topic2.sh
+```
+
+**Bước 4: Xóa dữ liệu InfluxDB (optional)**
+```bash
+# Xóa toàn bộ bucket và tạo lại
+source .env
+docker exec influxdb influx bucket delete --name logs --org $INFLUX_ORG
+docker exec influxdb influx bucket create --name logs --org $INFLUX_ORG --retention 7d
+```
+
+**Bước 5: Xóa Spark checkpoints**
+```bash
+# Xóa checkpoint để Spark đọc lại từ đầu
+rm -rf data/spark/checkpoints/*
+```
+
+**Giải thích:**
+- Nginx giữ file handle khi đang chạy → xóa file không tạo file mới ngay
+- `nginx -s reopen` hoặc restart mới tạo file log mới
+- Flume dùng `taildir_position.json` để track inode → phải xóa để detect file mới
+- Không cần xóa Flume checkpoint (trong `data/flume/agents/*/checkpoint/`), chỉ cần xóa position file
+
+
+## Grafana Dashboard - Trực quan hóa và Monitoring
+
+### Truy cập Grafana
+
+**URL**: http://localhost:3000
+
+**Thông tin đăng nhập:**
+- Username: `admin`
+- Password: `admin12345`
+
+### Hướng dẫn truy cập Dashboards
+
+1. Sau khi đăng nhập, click vào **biểu tượng 3 gạch ngang** (☰) ở góc trái trên cùng
+2. Chọn **Dashboards** từ menu
+3. Vào thư mục **Logs Monitoring**
+4. Chọn dashboard tương ứng để xem metrics real-time
+
+### Danh sách Dashboards có sẵn
+
+#### 1. Error Events Dashboard
+Dashboard theo dõi và phân tích các sự kiện lỗi từ error logs.
+
+**Metrics hiển thị:**
+- Tổng số lỗi theo thời gian
+- Phân loại lỗi theo level (ERROR/WARN/CRIT)
+- Phân bố lỗi theo hostname (web1/web2/web3)
+- Lỗi theo message_class (db/api/network/etc.)
+
+![Error Events Dashboard](img/grafana/ErrorAnalytics.jpg)
+
+#### 2. HTTP Stats Dashboard
+Dashboard hiển thị các metrics hiệu năng HTTP real-time.
+
+**Metrics hiển thị:**
+- Requests Per Second (RPS) theo hostname
+- Average Response Time (ms)
+- Max Response Time (ms)
+- Error Rate (%) - tỷ lệ 4xx/5xx
+- HTTP methods distribution (GET/POST/PUT/DELETE)
+
+![HTTP Stats Dashboard](img/grafana/HTTP_Stats.jpg)
+
+#### 3. Realtime Anomaly Detection Dashboard
+Dashboard phát hiện các hành vi bất thường trong traffic.
+
+**Metrics hiển thị:**
+- IP Spike Detection (traffic đột biến từ 1 IP)
+- Anomaly Score (điểm nghi ngờ 0-1)
+- Top anomalous IPs
+- Anomaly timeline và patterns
+- Phân loại theo `kind` (ip_spike, rate_limit, scan_pattern)
+
+![Realtime Anomaly Detection](img/grafana/AnomalyDetection.jpg)
+
+#### 4. Top URLs Dashboard
+Dashboard phân tích traffic patterns và endpoints phổ biến.
+
+**Metrics hiển thị:**
+- Top 10 URLs được truy cập nhiều nhất
+- Status code distribution theo URL
+- Traffic volume theo path
+- Error URLs (4xx/5xx status codes)
+
+![Top URLs Dashboard](img/grafana/TopURLs.jpg)
+
+### Cấu hình Datasource
+
+Grafana đã được cấu hình sẵn kết nối đến InfluxDB qua provisioning:
+
+```yaml
+# File: grafana/provisioning/datasources/influxdb.yml
+datasources:
+  - name: InfluxDB
+    type: influxdb
+    url: http://influxdb:8086
+    jsonData:
+      version: Flux
+      organization: ${INFLUX_ORG}
+      defaultBucket: ${INFLUX_BUCKET}
+    secureJsonData:
+      token: ${INFLUX_TOKEN}
 ```
 
 ### Troubleshooting
 
-#### Lỗi kết nối Spark Worker:
+#### Kiểm tra Containers:
 ```bash
-# Restart lại Spark cluster
-docker-compose -f docker-compose.spark.yml down
-docker-compose -f docker-compose.spark.yml up -d
+# Xem tất cả containers đang chạy
+docker compose ps
 
-# Kiểm tra network và services
-docker network ls | grep appnet
-docker-compose -f docker-compose.spark.yml ps
+# Xem logs của service cụ thể
+docker logs <container_name> --tail 50
+
+# Restart service
+docker restart <container_name>
 ```
 
-#### Lỗi InfluxDB connection:
+#### Lỗi kết nối InfluxDB:
 ```bash
-# Kiểm tra InfluxDB service
-docker-compose -f docker-compose.don.yml ps influxdb
-
-# Kiểm tra logs InfluxDB
-docker logs influxdb | tail -20
-
-# Test kết nối thủ công
+# Test kết nối
 curl -I http://localhost:8086/ping
 
-# Kiểm tra token và org
-source .env && echo "Token length: ${#INFLUX_TOKEN}, Org: $INFLUX_ORG"
+# Kiểm tra token
+source .env && echo "Token: ${INFLUX_TOKEN:0:20}..., Org: $INFLUX_ORG"
 ```
 
 #### Không có dữ liệu trong InfluxDB:
 ```bash
 # Kiểm tra Kafka có messages
-docker exec kafka kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic web-logs --max-messages 5 --timeout-ms 5000
+docker exec kafka kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic web-logs --max-messages 5
 
-# Kiểm tra Spark job có chạy và xử lý dữ liệu
-docker logs spark-master 2>/dev/null | grep -E "(SUCCESS.*Wrote|stream_access.py|MicroBatchExecution)"
+# Kiểm tra Spark job logs
+docker logs spark-master | grep "SUCCESS.*Wrote"
 
-# Kiểm tra environment variables được truyền đúng
-docker exec spark-master env | grep -E "(INFLUX|WINDOW|CHECKPOINT)"
-
-# Test manual write vào InfluxDB
-source .env && echo "test_measurement,tag1=value1 field1=123i $(date +%s)000000000" | docker exec -i influxdb influx write --bucket $INFLUX_BUCKET --org $INFLUX_ORG --token $INFLUX_TOKEN
+# Test query InfluxDB
+source .env && docker exec influxdb influx query 'from(bucket: "logs") |> range(start: -1h) |> limit(n: 5)' --org $INFLUX_ORG --token $INFLUX_TOKEN
 ```
 
+#### Grafana không có dữ liệu:
+```bash
+# Kiểm tra kết nối Grafana → InfluxDB
+docker exec grafana wget -qO- http://influxdb:8086/ping
+
+# Kiểm tra environment variables
+docker exec grafana env | grep INFLUX
+
+# Restart Grafana
+docker restart grafana
+```
+
+**Lưu ý:** Nếu Dashboard bị lỗi "Query error", vào **Configuration** → **Data Sources** → **InfluxDB** → **Test** để kiểm tra kết nối và token.
 
 
 ### Example output khi pipeline hoạt động
