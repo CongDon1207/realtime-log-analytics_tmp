@@ -78,13 +78,31 @@ def _write_influx(df, batch_id: int, measurement: str, tags: List[str], fields: 
     lines: List[str] = []
     for r in selected.toLocalIterator():
         tag_part = [f"env={_escape_tag(r['env'])}"]
+        # for t in tags:
+        #     if t == "env":
+        #         continue
+        #     val = r[t]
+        #     if val is None:
+        #         continue
+        #     tag_part.append(f"{t}={_escape_tag(str(val))}")
+
         for t in tags:
             if t == "env":
                 continue
-            val = r[t]
-            if val is None:
-                continue
-            tag_part.append(f"{t}={_escape_tag(str(val))}")
+            raw = r[t]
+            if raw is None:
+                if t == "hostname":
+                    sval = "unknown_host"
+                else:
+                    continue
+            else:
+                sval = str(raw).strip()  # ép thành string luôn
+                if not sval:
+                    if t == "hostname":
+                        sval = "unknown_host"
+                    else:
+                        continue
+            tag_part.append(f"{t}={_escape_tag(sval)}")
 
         field_part = []
         for f in fields:

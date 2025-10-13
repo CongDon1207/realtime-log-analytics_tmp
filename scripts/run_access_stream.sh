@@ -13,7 +13,7 @@ fi
 : "${KAFKA_TOPIC_ACCESS:=web-logs}"
 : "${WINDOW_DURATION:=10 seconds}"
 : "${WATERMARK:=2 minutes}"
-: "${CHECKPOINT_DIR:=file:///tmp/spark-checkpoints}"
+: "${CHECKPOINT_DIR:=file:///tmp/spark-checkpoints/access_$(date +%s)}"
 : "${INFLUX_URL:=http://influxdb:8086}"
 : "${INFLUX_ORG:=primary}"
 : "${INFLUX_BUCKET:=logs}"

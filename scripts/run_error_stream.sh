@@ -28,7 +28,7 @@ fi
 : "${KAFKA_TOPIC_ERROR:=web-errors}"     # topic chứa error log
 : "${WINDOW_DURATION:=10 seconds}"
 : "${WATERMARK:=2 minutes}"
-: "${CHECKPOINT_DIR_ERROR:=file:///tmp/spark-checkpoints-error}"
+: "${CHECKPOINT_DIR_ERROR:=file:///tmp/spark-checkpoints-error_$(date +%s)}"
 : "${INFLUX_URL:=http://influxdb:8086}"
 : "${INFLUX_ORG:=primary}"
 : "${INFLUX_BUCKET:=logs}"
