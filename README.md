@@ -33,6 +33,30 @@ Giải pháp **giám sát & phân tích log real-time** cho web servers:
 
 ---
 
+## 📈 Dashboard (mẫu)
+
+<div align="center">
+  <img src="docs/img/grafana/HTTP_Stats.jpg" alt="HTTP Realtime Stats" width="1000"><br/>
+  <em>Hình 3. HTTP Realtime Stats – RPS, latency, error rate</em>
+</div>
+
+<div align="center">
+  <img src="docs/img/grafana/ErrorAnalytics.jpg" alt="Error Events" width="1000"><br/>
+  <em>Hình 4. Error Events – phân loại lỗi theo hostname/level</em>
+</div>
+
+<div align="center">
+  <img src="docs/img/grafana/AnomalyDetection.jpg" alt="Realtime Anomaly Detection" width="1000"><br/>
+  <em>Hình 5. Realtime Anomaly Detection – ip_spike, error_surge, scan</em>
+</div>
+
+<div align="center">
+  <img src="docs/img/grafana/TopURLs.jpg" alt="Top URLs" width="1000"><br/>
+  <em>Hình 6. Top URLs – endpoints phổ biến và phân bố status</em>
+</div>
+
+---
+
 ## 🧰 Công nghệ sử dụng
 
 * **Apache Flume** – thu thập log (TAILDIR, Avro/Kafka sink)
@@ -159,4 +183,3 @@ realtime-log-analytics/
 ## 📚 Tài liệu chi tiết
 
 - 📄 **Project Doc (Google Docs)**: [Tài liệu Kiến trúc – Hệ thống Giám sát & Phân tích Log Server Tập trung](https://docs.google.com/document/d/1PiGJ2ZUnI4yse3WgkTP1DghxmsFws_z2dIaZyuNYdq8/edit?hl=vi&tab=t.0#heading=h.exjyajopfano)
-
