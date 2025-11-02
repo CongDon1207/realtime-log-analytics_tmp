@@ -1,0 +1,571 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: Anomaly
+    folder: Logs Monitoring
+    interval: 5m
+    rules:
+      - uid: c9276c33-945d-48ea-8b1e-cadb5824fa00
+        title: High anomaly score on any host
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: P6AAB30EDE0CEE0D3
+            model:
+              intervalMs: 1000
+              maxDataPoints: 43200
+              query: "from(bucket: \"logs\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r._measurement == \"anomaly\" and r._field == \"score\")\n  |> group(columns: [\"hostname\"])\n  |> max(column: \"_value\")\n  |> keep(columns: [\"_time\", \"_value\", \"hostname\"])\n  |> rename(columns: {_value: \"score\"})\n  |> yield(name: \"max_score_by_host\")\n"
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: []
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 20
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          description: "Anomaly detected on host. Check the rule's queries (A/B/C) in Grafana for details."
+          summary: "High anomaly score detected"
+        labels: {}
+        isPaused: false
+
+      - uid: 2a7f9b1e-1f3b-4c2e-9b2a-8e9f0d6b6a11
+        title: Anomaly trend - Web1 (mean 5m) > 20
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: P6AAB30EDE0CEE0D3
+            model:
+              intervalMs: 1000
+              maxDataPoints: 43200
+              query: "from(bucket: \"logs\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r._measurement == \"anomaly\" and r.hostname == \"web1\")\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\n  |> map(fn:(r) => ({ _time: r._time, _value: r.score, _field: r.hostname + \" | \" + r.kind }))\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: 5m, fn: mean, column: \"_value\", createEmpty: false)\n  |> keep(columns:[\"_time\",\"_value\",\"_field\"])\n  |> rename(columns: {_value: \"score\"})\n  |> yield(name: \"anomaly_score_trend_web1\")"
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: []
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 20
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Web1 anomaly score (5m mean) above 20"
+          description: "Anomaly detected on web1. Check the query results (A) in Grafana."
+        labels:
+          severity: critical
+          component: web1
+        isPaused: false
+
+      - uid: 6f3c8d22-3a8b-4d4b-9b1c-54f79a4e2e22
+        title: Anomaly trend - Web2 (mean 5m) > 20
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: P6AAB30EDE0CEE0D3
+            model:
+              intervalMs: 1000
+              maxDataPoints: 43200
+              query: "from(bucket: \"logs\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r._measurement == \"anomaly\" and r.hostname == \"web2\")\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\n  |> map(fn:(r) => ({ _time: r._time, _value: r.score, _field: r.hostname + \" | \" + r.kind }))\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: 5m, fn: mean, column: \"_value\", createEmpty: false)\n  |> keep(columns:[\"_time\",\"_value\",\"_field\"])\n  |> rename(columns: {_value: \"score\"})\n  |> yield(name: \"anomaly_score_trend_web2\")"
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: []
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 20
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Web2 anomaly score (5m mean) above 20"
+          description: "Anomaly detected on web2. Check the query results (A) in Grafana."
+        labels:
+          severity: critical
+          component: web2
+        isPaused: false
+
+      - uid: 9b8e4c11-77d9-4e2f-8834-0a2f6b1c3d33
+        title: Anomaly trend - Web3 (mean 5m) > 20
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: P6AAB30EDE0CEE0D3
+            model:
+              intervalMs: 1000
+              maxDataPoints: 43200
+              query: "from(bucket: \"logs\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r._measurement == \"anomaly\" and r.hostname == \"web3\")\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\n  |> map(fn:(r) => ({ _time: r._time, _value: r.score, _field: r.hostname + \" | \" + r.kind }))\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: 5m, fn: mean, column: \"_value\", createEmpty: false)\n  |> keep(columns:[\"_time\",\"_value\",\"_field\"])\n  |> rename(columns: {_value: \"score\"})\n  |> yield(name: \"anomaly_score_trend_web3\")"
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: []
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 20
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Web3 anomaly score (5m mean) above 20"
+          description: "Anomaly detected on web3. Check the query results (A) in Grafana."
+        labels:
+          severity: critical
+          component: web3
+        isPaused: false
+
+      - uid: b4a2c7d3-5e6f-4c8b-9d12-7f0a3b2d4e44
+        title: Max anomaly score (last 10m) > 20
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: P6AAB30EDE0CEE0D3
+            model:
+              intervalMs: 1000
+              maxDataPoints: 43200
+              query: "from(bucket: \"logs\")\n  |> range(start: -10m)\n  |> filter(fn:(r) => r._measurement == \"anomaly\")\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\n  |> max(column:\"score\")\n  |> keep(columns:[\"_time\",\"score\"])\n  |> rename(columns: {score: \"max_score\"})\n  |> yield(name:\"max_score\")"
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: []
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 20
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "Overall max anomaly score > 20"
+          description: "Max anomaly score across hosts: check the query results (A) in Grafana."
+        labels:
+          severity: critical
+          component: anomaly-gauge
+        isPaused: false
+
+      - uid: e5d9a7c8-8b9a-4f3a-9c55-2b1e7f4a5f55
+        title: Top error path/host - error_count > 10
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: P6AAB30EDE0CEE0D3
+            model:
+              intervalMs: 1000
+              maxDataPoints: 43200
+              query: "from(bucket:\"logs\")\n  |> range(start:-10m)\n  |> filter(fn:(r)=>r._measurement==\"top_urls\")\n  |> pivot(rowKey:[\"_time\",\"env\",\"hostname\",\"status\",\"path\"], columnKey:[\"_field\"], valueColumn:\"_value\")\n  |> filter(fn:(r)=>r.status =~ /^4.*/ or r.status =~ /^5.*/ )\n  |> group(columns:[\"hostname\",\"path\",\"status\"])\n  |> sum(column:\"count\")\n  |> rename(columns:{\"count\":\"error_count\"})\n  |> group()\n  |> max(column:\"error_count\")\n  |> keep(columns:[\"_time\",\"error_count\"])\n  |> rename(columns:{error_count: \"top_error_count\"})\n  |> yield(name:\"top_error_count\")"
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: []
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 10
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "High error count on a path/host"
+          description: "Top error count detected. Check the top_urls query (A) in Grafana for affected path/host."
+        labels:
+          severity: warning
+          component: http-errors
+        isPaused: false
+
+      - uid: a1b2c3d4-1122-3344-5566-77889900a666
+        title: HTTP 5xx errors (sum last 10m) > 10
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: P6AAB30EDE0CEE0D3
+            model:
+              intervalMs: 1000
+              maxDataPoints: 43200
+              query: "from(bucket:\"logs\")\n  |> range(start:-10m)\n  |> filter(fn:(r)=>r._measurement==\"top_urls\")\n  |> pivot(rowKey:[\"_time\",\"env\",\"hostname\",\"status\",\"path\"], columnKey:[\"_field\"], valueColumn:\"_value\")\n  |> filter(fn:(r)=> r.status =~ /^5.*/)\n  |> sum(column:\"count\")\n  |> keep(columns:[\"_time\",\"count\"])\n  |> rename(columns:{count: \"5xx_total\"})\n  |> yield(name:\"5xx_total\")"
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: []
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 10
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "High total 5xx errors"
+          description: "Elevated 5xx error rate detected. Check the top_urls query (A) in Grafana for details."
+        labels:
+          severity: warning
+          component: http-5xx
+        isPaused: false
